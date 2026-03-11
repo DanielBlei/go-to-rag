@@ -6,8 +6,14 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/ollama/ollama/api"
+)
+
+const (
+	defaultTimeout = 30 * time.Second
+	chatTimeout    = 3 * time.Minute
 )
 
 // Client wraps the Ollama API for embedding and chat generation.
@@ -18,7 +24,7 @@ type Client struct {
 }
 
 // New creates a Client connected to the given host using the specified models.
-func New(host, embedModel, chatModel string) (*Client, error) {
+func New(ctx context.Context, host, embedModel, chatModel string) (*Client, error) {
 	u, err := url.Parse(host)
 	if err != nil {
 		return nil, fmt.Errorf("invalid ollama host %q: %w", host, err)
@@ -28,7 +34,7 @@ func New(host, embedModel, chatModel string) (*Client, error) {
 		embedModel: embedModel,
 		chatModel:  chatModel,
 	}
-	if err := c.checkModels(context.Background()); err != nil {
+	if err := c.checkModels(ctx); err != nil {
 		return nil, err
 	}
 	return c, nil
@@ -36,6 +42,8 @@ func New(host, embedModel, chatModel string) (*Client, error) {
 
 // checkModels verifies that the required models are available locally.
 func (c *Client) checkModels(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, defaultTimeout)
+	defer cancel()
 	resp, err := c.api.List(ctx)
 	if err != nil {
 		return fmt.Errorf("cannot reach ollama at, is it running? (%w)", err)
@@ -55,6 +63,8 @@ func (c *Client) checkModels(ctx context.Context) error {
 
 // Embed returns the embedding vector for the given text.
 func (c *Client) Embed(ctx context.Context, text string) ([]float32, error) {
+	ctx, cancel := context.WithTimeout(ctx, defaultTimeout)
+	defer cancel()
 	resp, err := c.api.Embed(ctx, &api.EmbedRequest{
 		Model: c.embedModel,
 		Input: text,
@@ -70,6 +80,8 @@ func (c *Client) Embed(ctx context.Context, text string) ([]float32, error) {
 
 // Chat sends a single-turn prompt, streaming each token to w as it arrives.
 func (c *Client) Chat(ctx context.Context, prompt string, w io.Writer) error {
+	ctx, cancel := context.WithTimeout(ctx, chatTimeout)
+	defer cancel()
 	req := &api.ChatRequest{
 		Model: c.chatModel,
 		Messages: []api.Message{
