@@ -11,6 +11,26 @@ A local RAG (Retrieval-Augmented Generation) engine written in Go.
 - Answers questions using a local LLM (Ollama) — no cloud required
 - Designed to be extended: an [MCP](https://modelcontextprotocol.io) interface is planned, allowing any external LLM (Claude, OpenAI, etc.) to use the retrieval engine as a tool while keeping embeddings local
 
+## Quick Start
+
+Requires [Ollama](https://ollama.com) running locally.
+
+```bash
+# Pull the default model `qwen3.5:0.8b`, small, fast, great for development
+# https://ollama.com/library/qwen3.5:0.8b
+ollama pull qwen3.5:0.8b
+
+# Run a demo prompt (What's RAG?)
+make run-demo
+
+# Or build and run with your own prompt
+make build
+./bin/go-to-rag "what is RAG?"
+
+# Change the model
+./bin/go-to-rag -model llama3.2 "what is RAG?"
+```
+
 ## Goals
 
 - Experiment with RAG patterns in Go
