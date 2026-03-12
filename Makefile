@@ -15,7 +15,7 @@ build: ## Build the binary
 	go build -o bin/$(BINARY) .
 
 run-demo: build ## Build and run a demo prompt
-	./bin/$(BINARY) "what is RAG?"
+	./bin/$(BINARY) "what is AI RAG Pipelines?"
 
 ##@ Testing
 

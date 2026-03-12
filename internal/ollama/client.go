@@ -21,44 +21,63 @@ type Client struct {
 	api        *api.Client
 	embedModel string
 	chatModel  string
+	validated  bool
 }
 
 // New creates a Client connected to the given host using the specified models.
-func New(ctx context.Context, host, embedModel, chatModel string) (*Client, error) {
+func New(host, embedModel, chatModel string) (*Client, error) {
 	u, err := url.Parse(host)
 	if err != nil {
-		return nil, fmt.Errorf("invalid ollama host %q: %w", host, err)
+		return nil, fmt.Errorf("invalid host %q: %w", host, err)
 	}
-	c := &Client{
+	return &Client{
 		api:        api.NewClient(u, http.DefaultClient),
 		embedModel: embedModel,
 		chatModel:  chatModel,
-	}
-	if err := c.checkModels(ctx); err != nil {
-		return nil, err
-	}
-	return c, nil
+	}, nil
 }
 
-// checkModels verifies that the required models are available locally.
-func (c *Client) checkModels(ctx context.Context) error {
+// Validate confirms that Ollama is reachable and the required models are available.
+// TODO: to be reviewed, flip checkEmbed=true when the vector store is wired up.
+func (c *Client) Validate(ctx context.Context, checkEmbed, checkChat bool) error {
+	if c.validated {
+		return nil
+	}
 	ctx, cancel := context.WithTimeout(ctx, defaultTimeout)
 	defer cancel()
+
 	resp, err := c.api.List(ctx)
 	if err != nil {
-		return fmt.Errorf("cannot reach ollama at, is it running? (%w)", err)
+		return fmt.Errorf("connect to ollama: %w", err)
 	}
-	pulled := make(map[string]bool, len(resp.Models))
-	for _, m := range resp.Models {
-		pulled[m.Model] = true
-	}
-	// embedModel is intentionally excluded, not yet implemented.
-	for _, model := range []string{c.chatModel} {
-		if !pulled[model] && !pulled[model+":latest"] {
-			return fmt.Errorf("model %q not found\n  check installed models: `ollama list`\n  to pull it: `ollama pull %s`", model, model)
+
+	for _, want := range c.wantedModels(checkEmbed, checkChat) {
+		if !modelAvailable(resp.Models, want) {
+			return fmt.Errorf("model %q not found — run: ollama pull %s", want, want)
 		}
 	}
+	c.validated = true
 	return nil
+}
+
+func (c *Client) wantedModels(checkEmbed, checkChat bool) []string {
+	var models []string
+	if checkEmbed {
+		models = append(models, c.embedModel)
+	}
+	if checkChat {
+		models = append(models, c.chatModel)
+	}
+	return models
+}
+
+func modelAvailable(models []api.ListModelResponse, want string) bool {
+	for _, m := range models {
+		if m.Model == want || m.Model == want+":latest" {
+			return true
+		}
+	}
+	return false
 }
 
 // Embed returns the embedding vector for the given text.
