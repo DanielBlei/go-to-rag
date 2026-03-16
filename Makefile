@@ -1,12 +1,14 @@
-BINARY := go-to-rag
+BINARY     := go-to-rag
+MODEL_NAME := go-to-rag
+MODELFILE  := modelfiles/llama3.2-1b.Modelfile
 
 .DEFAULT_GOAL := help
 
-.PHONY: help build test lint lint-fix fmt tidy clean run-demo
+.PHONY: help build test test-v test-cover cover lint lint-fix fmt tidy clean run-demo model-create model-delete
 
 help: ## Display this help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} \
-	  /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2 } \
+	  /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2 } \
 	  /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) }' $(MAKEFILE_LIST)
 
 ##@ Development
@@ -14,13 +16,30 @@ help: ## Display this help
 build: ## Build the binary
 	go build -o bin/$(BINARY) .
 
-run-demo: build ## Build and run a demo prompt
-	./bin/$(BINARY) "what is AI RAG Pipelines?"
+run-demo: build model-create ## Build and run a demo prompt using the custom RAG model
+	./bin/$(BINARY) -model $(MODEL_NAME) "what is AI RAG Pipelines?"
+
+##@ Model
+
+model-create: ## Create the custom Ollama RAG model from $(MODELFILE) (skips if already present)
+	@ollama list | grep -q "^$(MODEL_NAME)" || ollama create $(MODEL_NAME) -f $(MODELFILE)
+
+model-delete: ## Remove the custom Ollama RAG model
+	ollama rm $(MODEL_NAME)
 
 ##@ Testing
 
 test: ## Run tests
 	go test -race -count=1 ./...
+
+test-v: ## Run tests with verbose output
+	go test -race -count=1 -v ./...
+
+test-cover: ## Run tests and write coverage profile
+	go test -race -count=1 -coverprofile=coverage.out ./...
+
+cover: test-cover ## Run tests and open coverage report in browser
+	go tool cover -html=coverage.out
 
 ##@ Code Quality
 

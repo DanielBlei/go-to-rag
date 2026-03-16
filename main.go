@@ -88,5 +88,5 @@ func main() {
 		}
 		log.Fatal().Err(err).Msg("chat failed")
 	}
-	fmt.Fprintln(os.Stdout)
+	_, _ = fmt.Fprintln(os.Stdout)
 }

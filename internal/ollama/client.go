@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sync"
 	"time"
 
 	"github.com/ollama/ollama/api"
@@ -18,10 +19,11 @@ const (
 
 // Client wraps the Ollama API for embedding and chat generation.
 type Client struct {
-	api        *api.Client
-	embedModel string
-	chatModel  string
-	validated  bool
+	api          *api.Client
+	embedModel   string
+	chatModel    string
+	validateOnce sync.Once
+	validateErr  error
 }
 
 // New creates a Client connected to the given host using the specified models.
@@ -40,24 +42,23 @@ func New(host, embedModel, chatModel string) (*Client, error) {
 // Validate confirms that Ollama is reachable and the required models are available.
 // TODO: to be reviewed, flip checkEmbed=true when the vector store is wired up.
 func (c *Client) Validate(ctx context.Context, checkEmbed, checkChat bool) error {
-	if c.validated {
-		return nil
-	}
-	ctx, cancel := context.WithTimeout(ctx, defaultTimeout)
-	defer cancel()
+	c.validateOnce.Do(func() {
+		tctx, cancel := context.WithTimeout(ctx, defaultTimeout)
+		defer cancel()
 
-	resp, err := c.api.List(ctx)
-	if err != nil {
-		return fmt.Errorf("connect to ollama: %w", err)
-	}
-
-	for _, want := range c.wantedModels(checkEmbed, checkChat) {
-		if !modelAvailable(resp.Models, want) {
-			return fmt.Errorf("model %q not found — run: ollama pull %s", want, want)
+		resp, err := c.api.List(tctx)
+		if err != nil {
+			c.validateErr = fmt.Errorf("connect to ollama: %w", err)
+			return
 		}
-	}
-	c.validated = true
-	return nil
+		for _, want := range c.wantedModels(checkEmbed, checkChat) {
+			if !modelAvailable(resp.Models, want) {
+				c.validateErr = fmt.Errorf("model %q not found — run: ollama pull %s", want, want)
+				return
+			}
+		}
+	})
+	return c.validateErr
 }
 
 func (c *Client) wantedModels(checkEmbed, checkChat bool) []string {
