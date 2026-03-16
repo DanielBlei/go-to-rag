@@ -23,7 +23,7 @@ const (
 	defaultChatModel  = "llama3.2:1b"
 )
 
-// withSignalCancel returns a context that is canceled when SIGINT or SIGTERM is received.
+// withSignalCancel returns a context that is cancelled when SIGINT or SIGTERM is received.
 // informing the shutdown process
 func withSignalCancel(parent context.Context) (context.Context, context.CancelFunc) {
 	ctx, cancel := context.WithCancel(parent)
@@ -54,7 +54,7 @@ func main() {
 
 	prompt := flag.Arg(0)
 	if prompt == "" {
-		fmt.Fprintln(os.Stderr, "usage: go-to-rag [flags] <prompt>")
+		_, _ = fmt.Fprintln(os.Stderr, "usage: go-to-rag [flags] <prompt>")
 		flag.PrintDefaults()
 		os.Exit(1)
 	}
@@ -68,7 +68,7 @@ func main() {
 	}
 
 	if err := client.Validate(ctx, false, true); err != nil {
-		if ctx.Err() == context.Canceled {
+		if errors.Is(ctx.Err(), context.Canceled) {
 			os.Exit(0)
 		}
 		if errors.Is(err, context.DeadlineExceeded) {
@@ -80,7 +80,7 @@ func main() {
 	log.Debug().Str("prompt", prompt).Msg("user input")
 
 	if err := client.Chat(ctx, prompt, os.Stdout); err != nil {
-		if ctx.Err() == context.Canceled {
+		if errors.Is(ctx.Err(), context.Canceled) {
 			os.Exit(0)
 		}
 		if errors.Is(err, context.DeadlineExceeded) {

@@ -48,6 +48,16 @@ make build
 | Vector store | In-memory (MVP) / Database (planned) | MVP: simplicity + speed. Database: persistence at scale                                             |
 | Interface | MCP (Model Context Protocol) | Standard protocol for composing LLM tools, it works with Claude, OpenAI, etc.                       |
 
+## Models
+
+Pre-tuned Ollama Modelfiles are provided in [`modelfiles/`](modelfiles/README.md):
+
+- `llama3.2:1b` — development and fast iteration; CPU-friendly, no GPU required
+- `llama3.1:8b` — production-like evaluation; targets a GPU-equipped machine (desktop, laptop, or server)
+
+To switch models, update the `MODELFILE` variable at the top of the `Makefile` to point to the desired Modelfile, then run `make model-delete model-create` to rebuild. 
+See [`modelfiles/README.md`](modelfiles/README.md) for VRAM requirements and parameter details.
+
 ## Contributing
 
 Any feedback, issues, and ideas are welcome.
