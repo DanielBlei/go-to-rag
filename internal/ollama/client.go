@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -73,8 +74,9 @@ func (c *Client) wantedModels(checkEmbed, checkChat bool) []string {
 }
 
 func modelAvailable(models []api.ListModelResponse, want string) bool {
+	wantBase := strings.TrimSuffix(want, ":latest")
 	for _, m := range models {
-		if m.Model == want || m.Model == want+":latest" {
+		if strings.TrimSuffix(m.Model, ":latest") == wantBase {
 			return true
 		}
 	}
@@ -115,6 +117,5 @@ func (c *Client) Chat(ctx context.Context, prompt string, w io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("chat: %w", err)
 	}
-	_, err = fmt.Fprintln(w)
-	return err
+	return nil
 }

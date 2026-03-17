@@ -4,7 +4,7 @@ MODELFILE  := modelfiles/llama3.2-1b.Modelfile
 
 .DEFAULT_GOAL := help
 
-.PHONY: help build test test-v test-cover cover lint lint-fix fmt tidy clean run-demo run-seed model-create model-delete
+.PHONY: help build test test-v test-cover cover lint lint-fix fmt tidy clean run-demo run-seed run-ingest model-create model-delete
 
 help: ## Display this help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} \
@@ -21,6 +21,9 @@ run-demo: build model-create ## Build and run a demo prompt using the custom RAG
 
 run-seed: build ## Seed sample documents to ./seeds
 	./bin/$(BINARY) seed
+
+run-ingest: build run-seed ## Embed seeded documents into the vector store
+	./bin/$(BINARY) --debug ingest ./seeds
 
 ##@ Model
 

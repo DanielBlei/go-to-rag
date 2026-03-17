@@ -33,7 +33,7 @@ func runAsk(cmd *cobra.Command, args []string) error {
 		if errors.Is(err, context.DeadlineExceeded) {
 			return fmt.Errorf("ollama timed out — is it overloaded?")
 		}
-		return fmt.Errorf("ollama validation: %w", err)
+		return fmt.Errorf("ollama chat validation: %w", err)
 	}
 
 	log.Debug().Str("prompt", args[0]).Msg("user input")

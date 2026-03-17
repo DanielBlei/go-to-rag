@@ -17,6 +17,7 @@ var (
 	host       string
 	embedModel string
 	chatModel  string
+	dbPath     string
 	debug      bool
 	log        zerolog.Logger
 )
@@ -25,6 +26,7 @@ const (
 	defaultHost       = "http://localhost:11434"
 	defaultEmbedModel = "nomic-embed-text"
 	defaultChatModel  = "llama3.2:1b"
+	defaultDBPath     = "./data/index.db"
 )
 
 var rootCmd = &cobra.Command{
@@ -43,6 +45,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&host, "host", defaultHost, "Ollama host URL")
 	rootCmd.PersistentFlags().StringVar(&chatModel, "model", defaultChatModel, "Ollama chat model")
 	rootCmd.PersistentFlags().StringVar(&embedModel, "embed-model", defaultEmbedModel, "Ollama embedding model")
+	rootCmd.PersistentFlags().StringVar(&dbPath, "db", defaultDBPath, "path to the vector store database")
 	rootCmd.PersistentFlags().BoolVar(&debug, "debug", false, "enable debug logging")
 }
 
