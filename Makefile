@@ -17,7 +17,7 @@ build: ## Build the binary
 	go build -o bin/$(BINARY) .
 
 run-demo: build model-create ## Build and run a demo prompt using the custom RAG model
-	./bin/$(BINARY) -model $(MODEL_NAME) "what is AI RAG Pipelines?"
+	./bin/$(BINARY) --model $(MODEL_NAME) ask "what is AI RAG Pipelines?"
 
 ##@ Model
 

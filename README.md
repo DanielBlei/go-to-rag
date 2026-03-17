@@ -25,10 +25,10 @@ make run-demo
 
 # Or build and run with your own prompt
 make build
-./bin/go-to-rag "What is Kubernetes?"
+./bin/go-to-rag ask "What is Kubernetes?"
 
 # Change the model
-./bin/go-to-rag -model llama3.2 "what is RAG?"
+./bin/go-to-rag --model llama3.2 ask "what is RAG?"
 ```
 
 ## Goals
