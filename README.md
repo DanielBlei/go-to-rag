@@ -25,10 +25,15 @@ make run-demo
 
 # Or build and run with your own prompt
 make build
-./bin/go-to-rag ask "What is Kubernetes?"
+./bin/go-to-rag ask "Explain Pod concept in Kubernetes?"
 
 # Change the model
-./bin/go-to-rag --model llama3.2 ask "what is RAG?"
+./bin/go-to-rag --model llama3.2 ask "What Kubebuilder does?"
+
+# Download seed documents for the RAG pipeline
+# Default manifest includes Kubernetes, OpenShift, OLM, and Kubebuilder docs
+./bin/go-to-rag seed                                    # downloads to ./seeds/
+./bin/go-to-rag seed --manifest my-docs.yaml ./my-docs  # your own URLs to a custom output
 ```
 
 ## Goals

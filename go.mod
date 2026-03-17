@@ -6,6 +6,7 @@ require (
 	github.com/ollama/ollama v0.17.7
 	github.com/rs/zerolog v1.34.0
 	github.com/spf13/cobra v1.7.0
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -20,5 +21,4 @@ require (
 	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
 	golang.org/x/crypto v0.43.0 // indirect
 	golang.org/x/sys v0.37.0 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

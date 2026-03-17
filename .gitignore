@@ -33,3 +33,6 @@ go.work.sum
 .vscode/
 .claude
 CLAUDE.md
+
+# Project related
+/seeds

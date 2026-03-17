@@ -1,0 +1,32 @@
+docs:
+  # Kubernetes
+  - url: https://raw.githubusercontent.com/kubernetes/website/main/content/en/docs/concepts/workloads/pods/_index.md
+    name: kubernetes_pods.md
+  - url: https://raw.githubusercontent.com/kubernetes/website/main/content/en/docs/concepts/extend-kubernetes/operator.md
+    name: kubernetes_operators.md
+  - url: https://raw.githubusercontent.com/kubernetes/website/main/content/en/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions.md
+    name: kubernetes_crds.md
+
+  # Operator Lifecycle Manager (OLM)
+  - url: https://raw.githubusercontent.com/operator-framework/operator-lifecycle-manager/master/README.md
+    name: olm_overview.md
+  - url: https://raw.githubusercontent.com/operator-framework/operator-lifecycle-manager/master/doc/design/architecture.md
+    name: olm_architecture.md
+  - url: https://raw.githubusercontent.com/operator-framework/operator-lifecycle-manager/master/doc/design/philosophy.md
+    name: olm_philosophy.md
+
+  # OpenShift
+  - url: https://raw.githubusercontent.com/openshift/enhancements/master/enhancements/ingress/custom-route-configuration.md
+    name: openshift_routes.md
+  - url: https://raw.githubusercontent.com/openshift/source-to-image/master/README.md
+    name: openshift_source_to_image.md
+  - url: https://raw.githubusercontent.com/openshift/origin/master/docs/images.md
+    name: openshift_imagestreams.md
+
+  # Kubebuilder
+  - url: https://raw.githubusercontent.com/kubernetes-sigs/kubebuilder/master/docs/book/src/introduction.md
+    name: kubebuilder_introduction.md
+  - url: https://raw.githubusercontent.com/kubernetes-sigs/kubebuilder/master/docs/book/src/quick-start.md
+    name: kubebuilder_quick_start.md
+  - url: https://raw.githubusercontent.com/kubernetes-sigs/kubebuilder/master/docs/book/src/cronjob-tutorial/basic-project.md
+    name: kubebuilder_cronjob_tutorial.md
