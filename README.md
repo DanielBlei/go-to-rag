@@ -29,12 +29,9 @@ make build
 
 # Change the model
 ./bin/go-to-rag --model llama3.2 ask "What Kubebuilder does?"
-
-# Download seed documents for the RAG pipeline
-# Default manifest includes Kubernetes, OpenShift, OLM, and Kubebuilder docs
-./bin/go-to-rag seed                                    # downloads to ./seeds/
-./bin/go-to-rag seed --manifest my-docs.yaml ./my-docs  # your own URLs to a custom output
 ```
+
+See [docs/quickstart.md](docs/quickstart.md) for the full pipeline (seed → ingest → ask).
 
 ## Goals
 
@@ -45,13 +42,13 @@ make build
 
 ## Stack
 
-| Component | Choice | Why                                                                                                 |
-|-----------|--------|-----------------------------------------------------------------------------------------------------|
-| Language | Go | Fast, compiled, good ecosystem for systems/tools                                                    |
-| Embeddings | Ollama (`nomic-embed-text`) | Local, fast, no API keys, good quality for retrieval                                                |
+| Component | Choice | Why                                                                                                |
+|-----------|--------|----------------------------------------------------------------------------------------------------|
+| Language | Go | Fast, compiled, good ecosystem for systems/tools                                                   |
+| Embeddings | Ollama (`nomic-embed-text`) | Local, fast, no API keys, good quality for retrieval                                               |
 | Reasoning | Local (Ollama) or remote (Claude/OpenAI via MCP) | Choose based on needs: local keeps everything self-contained, and remote leverages better reasoning |
-| Vector store | In-memory (MVP) / Database (planned) | MVP: simplicity + speed. Database: persistence at scale                                             |
-| Interface | MCP (Model Context Protocol) | Standard protocol for composing LLM tools, it works with Claude, OpenAI, etc.                       |
+| Vector store | SQLite (MVP) / Qdrant, pgvector (planned) | MVP: simplicity + speed. Swap via `Store` interface                                                |
+| Interface | MCP (Model Context Protocol) | Standard protocol for composing LLM tools, it works with Claude, OpenAI, etc.                      |
 
 ## Models
 
