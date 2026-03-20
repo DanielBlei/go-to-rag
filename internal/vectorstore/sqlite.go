@@ -178,6 +178,7 @@ func decodeEmbedding(b []byte) []float32 {
 
 // cosineSimilarity computes dot(a,b) / (norm(a) * norm(b)).
 // Returns 0 for zero vectors.
+// TODO: replace with sqlite-vec or similar ANN index
 func cosineSimilarity(a, b []float32) float64 {
 	if len(a) != len(b) || len(a) == 0 {
 		return 0
