@@ -17,10 +17,10 @@ const fallbackSystemPrompt = `You are a helpful assistant with deep knowledge of
 Answer questions clearly and concisely.
 
 Rules:
-- Use the provided context as your primary source.        
-- You may supplement the context with your own knowledge to give a more complete answer.             
+- Use the provided context as your primary source.
+- You may supplement the context with your own knowledge to give a more complete answer.
 - When adding information not found in the context, you HAVE TO inform the user:
-  "Note: supplementing answer with my own knowledge." 
+  "Note: supplementing answer with my own knowledge."
 - Never fabricate facts or sources.`
 
 var (
@@ -87,14 +87,7 @@ func runAsk(cmd *cobra.Command, args []string) error {
 		sysPrompt = fallbackSystemPrompt
 	}
 
-	var chatErr error
-	if ragPipelineContext != "" {
-		log.Debug().Str("rag pipeline context", ragPipelineContext).Msg("injecting retrieved context")
-		chatErr = client.AskWithContext(cmd.Context(), sysPrompt, ragPipelineContext, prompt, os.Stdout)
-	} else {
-		chatErr = client.Chat(cmd.Context(), sysPrompt, prompt, os.Stdout)
-	}
-
+	chatErr := client.Chat(cmd.Context(), sysPrompt, ragPipelineContext, prompt, os.Stdout)
 	if chatErr != nil {
 		if errors.Is(cmd.Context().Err(), context.Canceled) {
 			_, _ = fmt.Fprintln(os.Stdout)

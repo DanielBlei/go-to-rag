@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -63,6 +64,9 @@ func runIngest(cmd *cobra.Command, args []string) error {
 	}
 	defer func() { _ = store.Close() }()
 
+	if strings.Contains(globPat, "**") {
+		return fmt.Errorf("--glob does not support ** patterns")
+	}
 	pattern := filepath.Join(ingestPath, globPat)
 	matches, err := filepath.Glob(pattern)
 	if err != nil {

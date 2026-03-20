@@ -6,6 +6,7 @@ linters:
     - errcheck
     - staticcheck
     - ineffassign
+    - whitespace
 
 formatters:
   enable:

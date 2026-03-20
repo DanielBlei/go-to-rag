@@ -62,7 +62,8 @@ func withSignalCancel(parent context.Context) (context.Context, context.CancelFu
 	return ctx, cancel
 }
 
-// addRAGFlags registers the flags shared by commands that talk to Ollama and the vector store.
+// addRAGFlags registers flags shared by commands that talk to Ollama and the vector store.
+// todo: move to persistent flags; when calling Execute() more than once, e.g. integration tests, there is a stale state risk.
 func addRAGFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&host, "host", defaultHost, "Ollama host URL")
 	cmd.Flags().StringVar(&embedModel, "embed-model", defaultEmbedModel, "Ollama embedding model")

@@ -38,6 +38,7 @@ var _ Embedder = (*fakeClient)(nil)
 
 func TestRetrieve(t *testing.T) {
 	embedErr := errors.New("embed failed")
+	searchErr := errors.New("search failed")
 
 	tests := []struct {
 		name        string
@@ -67,6 +68,12 @@ func TestRetrieve(t *testing.T) {
 			client:  &fakeClient{err: embedErr},
 			store:   &fakeStore{},
 			wantErr: embedErr,
+		},
+		{
+			name:    "search error is propagated",
+			client:  &fakeClient{vec: []float32{1, 0, 0}},
+			store:   &fakeStore{err: searchErr},
+			wantErr: searchErr,
 		},
 	}
 
