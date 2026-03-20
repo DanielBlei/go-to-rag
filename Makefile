@@ -1,10 +1,11 @@
 BINARY     := go-to-rag
-MODEL_NAME := go-to-rag
+MODEL_NAME := go-to-rag:latest
 MODELFILE  := modelfiles/llama3.2-1b.Modelfile
 
 .DEFAULT_GOAL := help
 
-.PHONY: help build test test-v test-cover cover lint lint-fix fmt tidy clean run-demo run-seed run-ingest model-create model-delete
+.PHONY: help build test test-v test-cover cover lint lint-fix fmt tidy \
+	clean run-demo run-seed run-ingest model-create model-delete
 
 help: ## Display this help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} \
@@ -16,8 +17,9 @@ help: ## Display this help
 build: ## Build the binary
 	go build -o bin/$(BINARY) .
 
-run-demo: build model-create ## Build and run a demo prompt using the custom RAG model
-	./bin/$(BINARY) --model $(MODEL_NAME) ask "what is AI RAG Pipelines?"
+run-demo: build model-delete model-create run-seed run-ingest ## Build model, seed + ingest docs, then ask a question
+	./bin/$(BINARY) --model $(MODEL_NAME) ask \
+		"How does OLM manage the lifecycle of Operators on OpenShift?"
 
 run-seed: build ## Seed sample documents to ./seeds
 	./bin/$(BINARY) seed
@@ -27,11 +29,11 @@ run-ingest: build run-seed ## Embed seeded documents into the vector store
 
 ##@ Model
 
-model-create: ## Create the custom Ollama RAG model from $(MODELFILE) (skips if already present)
-	@ollama list | grep -q "^$(MODEL_NAME)" || ollama create $(MODEL_NAME) -f $(MODELFILE)
+model-create: ## Create/update the custom Ollama RAG model from $(MODELFILE)
+	@ollama create $(MODEL_NAME) -f $(MODELFILE)
 
-model-delete: ## Remove the custom Ollama RAG model
-	ollama rm $(MODEL_NAME)
+model-delete: ## Remove the custom Ollama RAG model (ignore if not present)
+	@ollama rm $(MODEL_NAME) 2>/dev/null || true
 
 ##@ Testing
 
