@@ -6,7 +6,7 @@
 
 ```bash
 ollama pull llama3.2:1b
-ollama pull nomic-embed-text
+ollama pull nomic-embed-text:latest
 ```
 
 ## Commands
@@ -23,16 +23,17 @@ go-to-rag ingest [path]        # embed documents into the vector store
 ./bin/go-to-rag ask <prompt>
 ```
 
-Streams a response from the chat model to stdout. No vector store needed.
+Retrieves the top-5 relevant chunks from the vector store, injects them as context, and streams a RAG-augmented response. If the store is missing or empty, `ask` logs a warning and falls back to the model's own knowledge.
 
 ```bash
 make build
 ./bin/go-to-rag ask "What is a Kubernetes operator?"
-./bin/go-to-rag --model llama3.2 ask "Explain CRDs"
+./bin/go-to-rag ask --model llama3.1:8b "Explain CRDs"
+./bin/go-to-rag ask --with-fallback "What does OLM do?"
 ./bin/go-to-rag --debug ask "What does OLM do?"
 ```
 
-`ask` only checks that the chat model is reachable and does not require `nomic-embed-text`.
+See [docs/ask.md](ask.md) for all flags and behaviour details.
 
 ## seed
 
@@ -80,12 +81,13 @@ make build
 ./bin/go-to-rag ask "What does OLM do?"
 ```
 
-## Global flags
+Or run the full pipeline in one shot via Make:
 
-| Flag            | Default                   | Description                |
-|-----------------|---------------------------|----------------------------|
-| `--host`        | `http://localhost:11434`  | Ollama host URL            |
-| `--model`       | `llama3.2:1b`             | Chat model                 |
-| `--embed-model` | `nomic-embed-text`        | Embedding model            |
-| `--db`          | `./data/index.db`         | Vector store database path |
-| `--debug`       | `false`                   | Enable debug logging       |
+```bash
+make run-demo                    # seed, ingest, and ask
+make run-demo WITH_FALLBACK=true # same, but allow the model to supplement retrieved context
+```
+
+## Flags
+
+`--debug` is the only global flag (available on all subcommands). All other flags : `--host`, `--model`, `--embed-model`, `--db`, `--with-fallback` ,  are per-command. See [docs/ask.md](ask.md) and [docs/ingest.md](ingest.md) for per-command flag references.

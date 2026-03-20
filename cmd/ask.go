@@ -17,10 +17,10 @@ const fallbackSystemPrompt = `You are a helpful assistant with deep knowledge of
 Answer questions clearly and concisely.
 
 Rules:
-- Prefer information from the provided context when available.
-- If the context is not helpful or missing, answer using your own knowledge.
-- When using your own knowledge instead of the context, inform the user:
-  "Note: I'm answering from my own references, not from the provided context."
+- Use the provided context as your primary source.        
+- You may supplement the context with your own knowledge to give a more complete answer.             
+- When adding information not found in the context, you HAVE TO inform the user:
+  "Note: supplementing answer with my own knowledge." 
 - Never fabricate facts or sources.`
 
 var (

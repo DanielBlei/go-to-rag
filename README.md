@@ -1,64 +1,87 @@
 # go-to-rag
 
-> **Status: under active development — experimental**
+![Go](https://img.shields.io/badge/Go-1.22+-00ADD8?style=flat&logo=go&logoColor=white)
+![Ollama](https://img.shields.io/badge/Ollama-local-black?style=flat&logo=ollama&logoColor=white)
+![SQLite](https://img.shields.io/badge/SQLite-WAL-003B57?style=flat&logo=sqlite&logoColor=white)
+![License](https://img.shields.io/badge/License-Apache%202.0-blue?style=flat)
 
-A local RAG (Retrieval-Augmented Generation) engine written in Go.
+A local RAG (Retrieval-Augmented Generation) engine written in Go, powered by [Ollama](https://ollama.com).
 
-## What it does
+Seed documents, embed them locally, and ask questions with no cloud and no API keys required.
 
-- Ingests documents and indexes them using local embeddings via [Ollama](https://ollama.com)
-- Retrieves relevant chunks using vector similarity search
-- Answers questions using a local LLM (Ollama) — no cloud required
-- Designed to be extended: an [MCP](https://modelcontextprotocol.io) interface is planned, allowing any external LLM (Claude, OpenAI, etc.) to use the retrieval engine as a tool while keeping embeddings local
+## Status
 
-## Quick Start
+The core RAG pipeline (`seed -> ingest -> ask`) is functional. Multi-turn chat and an [MCP](https://modelcontextprotocol.io) server interface are planned.
 
-Requires [Ollama](https://ollama.com) running locally.
+## Requirements
+
+- Go 1.22+
+- [Ollama](https://ollama.com) 0.5+, running locally
+- Models pulled:
 
 ```bash
-# Pull the default model `llama3.2:1b`, small, fast, great for development
-# https://ollama.com/library/llama3.2:1b
 ollama pull llama3.2:1b
-
-# Run a demo prompt (What's RAG?)
-make run-demo
-
-# Or build and run with your own prompt
-make build
-./bin/go-to-rag ask "Explain Pod concept in Kubernetes?"
-
-# Change the model
-./bin/go-to-rag --model llama3.2 ask "What Kubebuilder does?"
+ollama pull nomic-embed-text:latest
 ```
 
-See [docs/quickstart.md](docs/quickstart.md) for the full pipeline (seed → ingest → ask).
+## Quick start
 
-## Goals
+```bash
+make build
 
-- Experiment with RAG patterns in Go
-- Keep the stack simple and self-hostable (no managed services, no API keys needed to run embeddings)
-- Build a clean [Model Context Protocol](https://modelcontextprotocol.io) interface that lets external LLMs use retrieval as a pluggable tool
-- Compose local fast retrieval + smart reasoning (local Ollama or remote Claude/OpenAI)
+# Seed K8s docs, embed, and ask a question in one shot
+make run-demo
+
+# Or step through the pipeline manually
+./bin/go-to-rag seed
+./bin/go-to-rag ingest
+./bin/go-to-rag ask "What does OLM do?"
+```
+
+See [docs/quickstart.md](docs/quickstart.md) for the full pipeline walkthrough and flag reference.
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `ask <prompt>` | RAG-augmented question, retrieves relevant chunks and streams the answer |
+| `seed [dir]` | Download K8s/OLM/OpenShift docs for ingestion (default: `./seeds`) |
+| `ingest [path]` | Chunk, embed, and index documents into SQLite (default: `./seeds`) |
 
 ## Stack
 
-| Component | Choice | Why                                                                                                |
-|-----------|--------|----------------------------------------------------------------------------------------------------|
-| Language | Go | Fast, compiled, good ecosystem for systems/tools                                                   |
-| Embeddings | Ollama (`nomic-embed-text`) | Local, fast, no API keys, good quality for retrieval                                               |
-| Reasoning | Local (Ollama) or remote (Claude/OpenAI via MCP) | Choose based on needs: local keeps everything self-contained, and remote leverages better reasoning |
-| Vector store | SQLite (MVP) / Qdrant, pgvector (planned) | MVP: simplicity + speed. Swap via `Store` interface                                                |
-| Interface | MCP (Model Context Protocol) | Standard protocol for composing LLM tools, it works with Claude, OpenAI, etc.                      |
+| Component | Choice | Rationale |
+|-----------|--------|-----------|
+| Language | Go | Fast, compiled, good fit for systems tooling |
+| Embeddings | `nomic-embed-text:latest` via Ollama | Local, no API keys, 768-dim vectors |
+| Vector store | SQLite (WAL mode) | Zero-dependency MVP; swappable via `Store` interface |
+| Chat | Ollama (local) | Self-contained; MCP interface for remote LLMs planned |
+| CLI | Cobra | Subcommand structure with per-command flags |
 
 ## Models
 
-Pre-tuned Ollama Modelfiles are provided in [`modelfiles/`](modelfiles/README.md):
+Pre-tuned Modelfiles optimised for factual, grounded RAG output are in [`modelfiles/`](modelfiles/README.md):
 
-- `llama3.2:1b` — development and fast iteration; CPU-friendly, no GPU required
-- `llama3.1:8b` — production-like evaluation; targets a GPU-equipped machine (desktop, laptop, or server)
+| Model | Modelfile | Use case |
+|-------|-----------|----------|
+| `llama3.2:1b` | `llama3.2-1b.Modelfile` | Development, CPU-friendly, fast iteration |
+| `llama3.1:8b` | `llama3.1-8b.Modelfile` | Production-like evaluation, GPU recommended |
 
-To switch models, update the `MODELFILE` variable at the top of the `Makefile` to point to the desired Modelfile, then run `make model-delete model-create` to rebuild. 
+To switch models, update the `MODELFILE` variable at the top of the `Makefile` to point to the desired Modelfile, then run `make model-create` to rebuild.
 See [`modelfiles/README.md`](modelfiles/README.md) for VRAM requirements and parameter details.
+
+```bash
+make model-create   # build (or rebuild) the custom model from the active Modelfile
+```
+
+## Development
+
+```bash
+make test      # go test -race -count=1 ./...
+make lint      # golangci-lint run ./...
+make build     # builds to bin/go-to-rag
+make fmt       # gofmt -w .
+```
 
 ## Contributing
 

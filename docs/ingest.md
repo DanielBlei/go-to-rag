@@ -1,6 +1,6 @@
 # ingest
 
-Embed documents from a directory into the vector store.
+Embed documents from a directory into the vector store using `nomic-embed-text:latest`.
 
 ## Usage
 
@@ -17,13 +17,13 @@ Default path: `./seeds`
 | `--glob`       | `*.md`            | Glob pattern to match files in `[path]` |
 | `--db`         | `./data/index.db` | Vector store database path              |
 
-## Pipeline
+## Workflow
 
 For each matched file:
 
 1. **Skip check**: `HasSource` queries SQLite by absolute path. Already-indexed files are skipped entirely.
 2. **Chunk**: file is read into memory, converted to `[]rune`, then split with a sliding window: `step = chunkSize - overlap`, producing chunks at offsets `0, step, 2*step, ...`. Whitespace-only chunks are dropped.
-3. **Embed**: each chunk is sent to Ollama (`nomic-embed-text`) and returns `[]float32` (768 dimensions).
+3. **Embed**: each chunk is sent to Ollama (`nomic-embed-text:latest`) and returns `[]float32` (768 dimensions).
 4. **Store**: embedding is encoded as little-endian bytes (4 bytes × 768 = 3072 bytes) and inserted into SQLite. A failure at any chunk triggers `DeleteSource` to roll back all chunks for that file.
 
 ## Chunking
