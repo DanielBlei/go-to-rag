@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/DanielBlei/go-to-rag/internal/chunker"
+	"github.com/DanielBlei/go-to-rag/internal/ollama"
 	"github.com/DanielBlei/go-to-rag/internal/vectorstore"
 )
 
@@ -20,6 +21,7 @@ var (
 
 func init() {
 	rootCmd.AddCommand(ingestCmd)
+	addRAGFlags(ingestCmd)
 	ingestCmd.Flags().IntVar(&chunkSize, "chunk-size", 512, "chunk size in characters")
 	ingestCmd.Flags().IntVar(&overlap, "overlap", 50, "overlap between chunks in characters")
 	ingestCmd.Flags().StringVar(&globPat, "glob", "*.md", "glob pattern to match files")
@@ -40,7 +42,7 @@ func runIngest(cmd *cobra.Command, args []string) error {
 		ingestPath = args[0]
 	}
 
-	client, err := newOllamaClient()
+	client, err := ollama.New(host, embedModel, "")
 	if err != nil {
 		return fmt.Errorf("ollama init: %w", err)
 	}
@@ -50,7 +52,7 @@ func runIngest(cmd *cobra.Command, args []string) error {
 			return nil
 		}
 		if errors.Is(err, context.DeadlineExceeded) {
-			return fmt.Errorf("ollama timed out — is it overloaded?")
+			return fmt.Errorf("ollama timed out, is it overloaded")
 		}
 		return fmt.Errorf("ollama embed validation: %w", err)
 	}

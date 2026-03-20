@@ -10,13 +10,11 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/DanielBlei/go-to-rag/internal/logger"
-	"github.com/DanielBlei/go-to-rag/internal/ollama"
 )
 
 var (
 	host       string
 	embedModel string
-	chatModel  string
 	dbPath     string
 	debug      bool
 	log        zerolog.Logger
@@ -24,7 +22,7 @@ var (
 
 const (
 	defaultHost       = "http://localhost:11434"
-	defaultEmbedModel = "nomic-embed-text"
+	defaultEmbedModel = "nomic-embed-text:latest"
 	defaultChatModel  = "llama3.2:1b"
 	defaultDBPath     = "./data/index.db"
 )
@@ -42,15 +40,7 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringVar(&host, "host", defaultHost, "Ollama host URL")
-	rootCmd.PersistentFlags().StringVar(&chatModel, "model", defaultChatModel, "Ollama chat model")
-	rootCmd.PersistentFlags().StringVar(&embedModel, "embed-model", defaultEmbedModel, "Ollama embedding model")
-	rootCmd.PersistentFlags().StringVar(&dbPath, "db", defaultDBPath, "path to the vector store database")
 	rootCmd.PersistentFlags().BoolVar(&debug, "debug", false, "enable debug logging")
-}
-
-func newOllamaClient() (*ollama.Client, error) {
-	return ollama.New(host, embedModel, chatModel)
 }
 
 // withSignalCancel returns a context that is cancelled when SIGINT or SIGTERM is received.
@@ -70,6 +60,13 @@ func withSignalCancel(parent context.Context) (context.Context, context.CancelFu
 	}()
 
 	return ctx, cancel
+}
+
+// addRAGFlags registers the flags shared by commands that talk to Ollama and the vector store.
+func addRAGFlags(cmd *cobra.Command) {
+	cmd.Flags().StringVar(&host, "host", defaultHost, "Ollama host URL")
+	cmd.Flags().StringVar(&embedModel, "embed-model", defaultEmbedModel, "Ollama embedding model")
+	cmd.Flags().StringVar(&dbPath, "db", defaultDBPath, "path to the vector store database")
 }
 
 // Execute runs the root command with signal-aware context.
