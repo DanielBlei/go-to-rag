@@ -23,8 +23,29 @@ func TestNew(t *testing.T) {
 		{
 			name:       "valid URL",
 			host:       "http://localhost:11434",
+			embedModel: "nomic-embed-text:latest",
+			chatModel:  "llama3.2:1b",
+			wantErr:    false,
+		},
+		{
+			name:       "missing tag on embed model",
+			host:       "http://localhost:11434",
 			embedModel: "nomic-embed-text",
 			chatModel:  "llama3.2:1b",
+			wantErr:    true,
+		},
+		{
+			name:       "missing tag on chat model",
+			host:       "http://localhost:11434",
+			embedModel: "nomic-embed-text:latest",
+			chatModel:  "llama3.2",
+			wantErr:    true,
+		},
+		{
+			name:       "empty chat model (ingest use case)",
+			host:       "http://localhost:11434",
+			embedModel: "nomic-embed-text:latest",
+			chatModel:  "",
 			wantErr:    false,
 		},
 		{
@@ -132,7 +153,7 @@ func TestValidate(t *testing.T) {
 				host = srv.URL
 			}
 
-			c, err := New(host, "nomic-embed-text", "llama3.2:1b")
+			c, err := New(host, "nomic-embed-text:latest", "llama3.2:1b")
 			if err != nil {
 				t.Fatal(err)
 			}

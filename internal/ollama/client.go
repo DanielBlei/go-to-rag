@@ -33,6 +33,11 @@ func New(host, embedModel, chatModel string) (*Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid host %q: %w", host, err)
 	}
+	for _, m := range []string{embedModel, chatModel} {
+		if m != "" && !strings.Contains(m, ":") {
+			return nil, fmt.Errorf("model %q has no tag, use an explicit tag to avoid pulling the wrong model (e.g. %s:latest)", m, m)
+		}
+	}
 	return &Client{
 		api:        api.NewClient(u, http.DefaultClient),
 		embedModel: embedModel,
@@ -41,7 +46,6 @@ func New(host, embedModel, chatModel string) (*Client, error) {
 }
 
 // Validate confirms that Ollama is reachable and the required models are available.
-// TODO: to be reviewed, flip checkEmbed=true when the vector store is wired up.
 func (c *Client) Validate(ctx context.Context, checkEmbed, checkChat bool) error {
 	c.validateOnce.Do(func() {
 		tctx, cancel := context.WithTimeout(ctx, defaultTimeout)
@@ -101,14 +105,15 @@ func (c *Client) Embed(ctx context.Context, text string) ([]float32, error) {
 }
 
 // Chat sends a single-turn prompt, streaming each token to w as it arrives.
-func (c *Client) Chat(ctx context.Context, prompt string, w io.Writer) error {
+// If systemPrompt is non-empty it is prepended as a system message, overriding
+// any system prompt embedded in the Modelfile.
+func (c *Client) Chat(ctx context.Context, systemPrompt, prompt string, w io.Writer) error {
 	ctx, cancel := context.WithTimeout(ctx, chatTimeout)
 	defer cancel()
+	messages := buildMessages(systemPrompt, "", prompt)
 	req := &api.ChatRequest{
-		Model: c.chatModel,
-		Messages: []api.Message{
-			{Role: "user", Content: prompt},
-		},
+		Model:    c.chatModel,
+		Messages: messages,
 	}
 	err := c.api.Chat(ctx, req, func(resp api.ChatResponse) error {
 		_, err := fmt.Fprint(w, resp.Message.Content)
@@ -118,4 +123,45 @@ func (c *Client) Chat(ctx context.Context, prompt string, w io.Writer) error {
 		return fmt.Errorf("chat: %w", err)
 	}
 	return nil
+}
+
+// AskWithContext prepends contextBlock to the user message and streams the
+// response to w. If contextBlock is empty, falls back to Chat.
+// If systemPrompt is non-empty it is prepended as a system message, overriding
+// any system prompt embedded in the Modelfile.
+func (c *Client) AskWithContext(ctx context.Context, systemPrompt, contextBlock, userPrompt string, w io.Writer) error {
+	if contextBlock == "" {
+		return c.Chat(ctx, systemPrompt, userPrompt, w)
+	}
+	ctx, cancel := context.WithTimeout(ctx, chatTimeout)
+	defer cancel()
+	messages := buildMessages(systemPrompt, contextBlock, userPrompt)
+	req := &api.ChatRequest{
+		Model:    c.chatModel,
+		Messages: messages,
+	}
+	err := c.api.Chat(ctx, req, func(resp api.ChatResponse) error {
+		_, err := fmt.Fprint(w, resp.Message.Content)
+		return err
+	})
+	if err != nil {
+		return fmt.Errorf("chat: %w", err)
+	}
+	return nil
+}
+
+// buildMessages assembles the messages slice for a chat request.
+// If systemPrompt is non-empty it is prepended as a system message.
+// If contextBlock is non-empty it is included in the user message.
+func buildMessages(systemPrompt, contextBlock, userPrompt string) []api.Message {
+	var messages []api.Message
+	if systemPrompt != "" {
+		messages = append(messages, api.Message{Role: "system", Content: systemPrompt})
+	}
+	userContent := userPrompt
+	if contextBlock != "" {
+		userContent = "Context:\n" + contextBlock + "\n\nQuestion: " + userPrompt
+	}
+	messages = append(messages, api.Message{Role: "user", Content: userContent})
+	return messages
 }
