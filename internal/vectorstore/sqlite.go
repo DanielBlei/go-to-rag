@@ -64,6 +64,7 @@ func NewSQLite(dbPath string) (*SQLiteStore, error) {
 }
 
 // AddChunk stores a chunk with its embedding.
+// todo: add transactional operations, avoiding partial chunk ingestion.
 func (s *SQLiteStore) AddChunk(ctx context.Context, source, text string, embedding []float32, chunkIndex int) error {
 	blob := encodeEmbedding(embedding)
 	_, err := s.db.ExecContext(ctx, insertChunkQuery, source, text, blob, chunkIndex)

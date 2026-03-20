@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ollama/ollama/api"
+	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -105,41 +106,13 @@ func (c *Client) Embed(ctx context.Context, text string) ([]float32, error) {
 }
 
 // Chat sends a single-turn prompt, streaming each token to w as it arrives.
+// contextBlock is optional; when non-empty it is prepended to the user message.
 // If systemPrompt is non-empty it is prepended as a system message, overriding
 // any system prompt embedded in the Modelfile.
-func (c *Client) Chat(ctx context.Context, systemPrompt, prompt string, w io.Writer) error {
+func (c *Client) Chat(ctx context.Context, systemPrompt, contextBlock, userPrompt string, w io.Writer) error {
 	ctx, cancel := context.WithTimeout(ctx, chatTimeout)
 	defer cancel()
-	messages := buildMessages(systemPrompt, "", prompt)
-	req := &api.ChatRequest{
-		Model:    c.chatModel,
-		Messages: messages,
-	}
-	err := c.api.Chat(ctx, req, func(resp api.ChatResponse) error {
-		_, err := fmt.Fprint(w, resp.Message.Content)
-		return err
-	})
-	if err != nil {
-		return fmt.Errorf("chat: %w", err)
-	}
-	return nil
-}
-
-// AskWithContext prepends contextBlock to the user message and streams the
-// response to w. If contextBlock is empty, falls back to Chat.
-// If systemPrompt is non-empty it is prepended as a system message, overriding
-// any system prompt embedded in the Modelfile.
-func (c *Client) AskWithContext(ctx context.Context, systemPrompt, contextBlock, userPrompt string, w io.Writer) error {
-	if contextBlock == "" {
-		return c.Chat(ctx, systemPrompt, userPrompt, w)
-	}
-	ctx, cancel := context.WithTimeout(ctx, chatTimeout)
-	defer cancel()
-	messages := buildMessages(systemPrompt, contextBlock, userPrompt)
-	req := &api.ChatRequest{
-		Model:    c.chatModel,
-		Messages: messages,
-	}
+	req := &api.ChatRequest{Model: c.chatModel, Messages: buildMessages(systemPrompt, contextBlock, userPrompt)}
 	err := c.api.Chat(ctx, req, func(resp api.ChatResponse) error {
 		_, err := fmt.Fprint(w, resp.Message.Content)
 		return err
@@ -160,6 +133,7 @@ func buildMessages(systemPrompt, contextBlock, userPrompt string) []api.Message 
 	}
 	userContent := userPrompt
 	if contextBlock != "" {
+		log.Debug().Str("rag pipeline context", contextBlock).Msg("retrieved context")
 		userContent = "Context:\n" + contextBlock + "\n\nQuestion: " + userPrompt
 	}
 	messages = append(messages, api.Message{Role: "user", Content: userContent})
