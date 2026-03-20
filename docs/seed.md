@@ -2,20 +2,24 @@
 
 Download documents into a local directory for ingestion.
 
-## Usage
-
 ```bash
 ./bin/go-to-rag seed [directory]
 ```
 
 Default directory: `./seeds`
 
-| Flag         | Default                              | Description                          |
-|--------------|--------------------------------------|--------------------------------------|
-| `--manifest` | built-in `internal/seed/seed_data.yaml` | Path to a custom YAML manifest    |
+| Flag         | Default                                 | Description                      |
+|--------------|-----------------------------------------|----------------------------------|
+| `--manifest` | built-in `internal/seed/seed_data.yaml` | Path to a custom YAML manifest   |
 
-If `--manifest` is not set, the binary uses `seed_data.yaml` compiled into it at build time via
-`//go:embed` for development purposes.
+## Workflow
+
+1. **Load manifest**: parses the YAML manifest (built-in or `--manifest`). The default manifest is compiled into the binary at build time via `//go:embed`, so `seed` works offline once built.
+2. **Validate URLs**: GitHub `blob/` and `tree/` URLs are rejected before any network call ,  they return HTML, not raw content. Use `raw.githubusercontent.com` instead.
+3. **Download**: each document is fetched under a 30-second per-file timeout. The full body is read into memory before writing to disk ,  a failed download leaves no partial file.
+4. **Skip existing**: files are checked with `os.Stat` before the request is made. Already-present files are skipped with no network activity, making re-runs safe.
+
+`Run` returns the number of files written. Zero means everything was already present.
 
 ## Custom manifest
 
@@ -29,9 +33,6 @@ docs:
 
 Pass it with `./bin/go-to-rag seed --manifest my-docs.yaml ./my-docs`.
 
-URLs must point to raw content. GitHub `blob/` and `tree/` URLs are rejected at parse time.
-Use `raw.githubusercontent.com` instead.
-
 ## Default corpus
 
 12 documents embedded in the binary (`internal/seed/seed_data.yaml`):
@@ -41,21 +42,8 @@ Use `raw.githubusercontent.com` instead.
 - OpenShift
 - Kubebuilder
 
-## Implementation
-
-The manifest YAML is parsed into `seed.Manifest{ Docs []Doc }` where each `Doc` has a `URL`
-and `Name`. The default manifest is embedded at compile time via `//go:embed seed_data.yaml`
-and parsed with `gopkg.in/yaml.v3`.
-
-Each document is fetched with `http.DefaultClient` under a 30-second per-file context timeout.
-The destination file is written only after the full body is read into memory, so a failed
-download leaves no partial file. Existing files are detected with `os.Stat` before the request
-is made, so re-runs skip them with no network activity.
-
-`Run` returns the number of files written. Zero means everything was already present.
-
 ## Notes
 
-- Existing files are skipped, re-running is safe.
-- Requires internet access to fetch documents.
 - Does not require Ollama.
+- Requires internet access to fetch documents.
+- Re-running is safe ,  existing files are never overwritten.

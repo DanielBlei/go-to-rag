@@ -17,8 +17,15 @@ help: ## Display this help
 build: ## Build the binary
 	go build -o bin/$(BINARY) .
 
+WITH_FALLBACK ?= false
+ifeq ($(WITH_FALLBACK),true)
+FALLBACK_FLAG := --with-fallback
+else
+FALLBACK_FLAG :=
+endif
+
 run-demo: build model-delete model-create run-seed run-ingest ## Build model, seed + ingest docs, then ask a question
-	./bin/$(BINARY) --model $(MODEL_NAME) ask \
+	./bin/$(BINARY) ask --model $(MODEL_NAME) $(FALLBACK_FLAG) \
 		"How does OLM manage the lifecycle of Operators on OpenShift?"
 
 run-seed: build ## Seed sample documents to ./seeds
