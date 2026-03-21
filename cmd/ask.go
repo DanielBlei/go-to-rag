@@ -34,7 +34,7 @@ func init() {
 	addRAGFlags(askCmd)
 	askCmd.Flags().StringVar(&chatModel, "model", defaultChatModel, "Ollama chat model")
 	askCmd.Flags().BoolVar(&withFallback, "with-fallback", false, "allow the model to answer from its own knowledge when context is missing")
-	askCmd.Flags().IntVar(&topK, "top-k", 5, "number of chunks/top matches to retrieve from the vector store")
+	askCmd.Flags().IntVar(&topK, "top-k", 10, "number of chunks/top matches to retrieve from the vector store")
 }
 
 var askCmd = &cobra.Command{

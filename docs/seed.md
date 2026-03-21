@@ -15,8 +15,8 @@ Default directory: `./seeds`
 ## Workflow
 
 1. **Load manifest**: parses the YAML manifest (built-in or `--manifest`). The default manifest is compiled into the binary at build time via `//go:embed`, so `seed` works offline once built.
-2. **Validate URLs**: GitHub `blob/` and `tree/` URLs are rejected before any network call ,  they return HTML, not raw content. Use `raw.githubusercontent.com` instead.
-3. **Download**: each document is fetched under a 30-second per-file timeout. The full body is read into memory before writing to disk ,  a failed download leaves no partial file.
+2. **Validate URLs**: GitHub `blob/` and `tree/` URLs are rejected before any network call. They return HTML, not raw content. Use `raw.githubusercontent.com` instead.
+3. **Download**: each document is fetched under a 30-second per-file timeout. The full body is read into memory before writing to disk. A failed download leaves no partial file.
 4. **Skip existing**: files are checked with `os.Stat` before the request is made. Already-present files are skipped with no network activity, making re-runs safe.
 
 `Run` returns the number of files written. Zero means everything was already present.
@@ -35,7 +35,7 @@ Pass it with `./bin/go-to-rag seed --manifest my-docs.yaml ./my-docs`.
 
 ## Default corpus
 
-12 documents embedded in the binary (`internal/seed/seed_data.yaml`):
+14 documents embedded in the binary (`internal/seed/seed_data.yaml`):
 
 - Kubernetes: Pods, Operators, CRDs
 - OLM (Operator Lifecycle Manager)
@@ -46,4 +46,4 @@ Pass it with `./bin/go-to-rag seed --manifest my-docs.yaml ./my-docs`.
 
 - Does not require Ollama.
 - Requires internet access to fetch documents.
-- Re-running is safe ,  existing files are never overwritten.
+- Re-running is safe. Existing files are never overwritten.

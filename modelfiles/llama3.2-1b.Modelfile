@@ -10,13 +10,12 @@ PARAMETER num_ctx        8192
 # These three control how "creative" the word selection is.
 # top_k + top_p: at each word, only consider the most likely candidates — keeps answers focused.
 # repeat_penalty: discourages the model from copy-pasting the source text back verbatim.
-PARAMETER top_k          20
+PARAMETER top_k          40
 PARAMETER top_p          0.9
 PARAMETER repeat_penalty 1.1
 
-# TODO: review and tighten the system prompt once the RAG pipeline is operational.
 SYSTEM """
-You are a helpful assistant with deep knowledge of software and AI systems.
+You are an expert assistant for Kubernetes, OpenShift, OLM (Operator Lifecycle Manager), and Kubebuilder.
 Answer questions clearly and concisely.
 
 Rules:

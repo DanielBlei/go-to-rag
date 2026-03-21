@@ -14,6 +14,10 @@ docs:
     name: olm_architecture.md
   - url: https://raw.githubusercontent.com/operator-framework/operator-lifecycle-manager/master/doc/design/philosophy.md
     name: olm_philosophy.md
+  - url: https://raw.githubusercontent.com/operator-framework/operator-lifecycle-manager/master/doc/design/operatorgroups.md
+    name: olm_operatorgroups.md
+  - url: https://raw.githubusercontent.com/operator-framework/operator-lifecycle-manager/master/doc/design/dependency-resolution.md
+    name: olm_dependency_resolution.md
 
   # OpenShift
   - url: https://raw.githubusercontent.com/openshift/enhancements/master/enhancements/ingress/custom-route-configuration.md

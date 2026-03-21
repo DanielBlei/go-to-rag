@@ -1,6 +1,6 @@
 # Modelfiles
 
-Pre-tuned Ollama Modelfiles for this RAG pipeline. Both are configured for deterministic, factual output (low temperature, controlled sampling) rather than creative generation.
+Pre-tuned Ollama Modelfiles for the built-in K8s/OLM/OpenShift/Kubebuilder knowledge base. Both are configured for deterministic, factual output (low temperature, controlled sampling) rather than creative generation. The system prompt is scoped to this domain.
 
 ## Models
 
@@ -17,7 +17,7 @@ The 8b Modelfile sets `num_gpu 99` to pin all layers on the GPU. On a machine wi
 |-----------|-----------------|-----------|
 | `temperature` | 0.1 / 0.1 | Near-deterministic output; RAG answers should be grounded, not creative |
 | `num_ctx` | 8192 / 32768 | 32k gives the 8b room to reason over larger retrieved chunks |
-| `top_k` | 20 / 40 | Restricts token candidates at each step; keeps answers on-topic |
+| `top_k` | 40 / 40 | Restricts token candidates at each step; keeps answers on-topic |
 | `top_p` | 0.9 / 0.9 | Nucleus sampling threshold |
 | `repeat_penalty` | 1.1 / 1.05 | Discourages verbatim repetition of source text |
 
