@@ -12,9 +12,10 @@ ollama pull nomic-embed-text:latest
 ## Commands
 
 ```bash
-go-to-rag ask <prompt>         # ask a question, stream the answer
-go-to-rag seed [directory]     # download documents for ingestion
-go-to-rag ingest [path]        # embed documents into the vector store
+./bin/go-to-rag ask <prompt>         # ask a question, stream the answer
+./bin/go-to-rag seed [directory]     # download documents for ingestion
+./bin/go-to-rag ingest [path]        # embed documents into the vector store
+./bin/go-to-rag mcp                  # start the MCP server for external LLM integration
 ```
 
 ## ask
@@ -23,14 +24,14 @@ go-to-rag ingest [path]        # embed documents into the vector store
 ./bin/go-to-rag ask <prompt>
 ```
 
-Retrieves the top-5 relevant chunks from the vector store, injects them as context, and streams a RAG-augmented response. If the store is missing or empty, `ask` logs a warning and falls back to the model's own knowledge.
+Retrieves the top `--top-k` chunks (default 10) from the vector store, injects them as context, and streams a RAG-augmented response. If the store is missing or empty, `ask` logs a warning and falls back to the model's own knowledge.
 
 ```bash
 make build
-./bin/go-to-rag ask "What is a Kubernetes operator?"
-./bin/go-to-rag ask --model llama3.1:8b "Explain CRDs"
-./bin/go-to-rag ask --with-fallback "What does OLM do?"
-./bin/go-to-rag --debug ask "What does OLM do?"
+./bin/go-to-rag ask "What is a Kubernetes operator?"              # standard RAG query
+./bin/go-to-rag ask --model llama3.1:8b "Explain CRDs"           # use a larger model
+./bin/go-to-rag ask --with-fallback "What does OLM do?"          # retrieved context + model knowledge
+./bin/go-to-rag --debug ask "What does OLM do?"                  # log retrieved chunks and prompt
 ```
 
 See [docs/ask.md](ask.md) for all flags and behaviour details.
@@ -41,7 +42,7 @@ See [docs/ask.md](ask.md) for all flags and behaviour details.
 ./bin/go-to-rag seed [directory]
 ```
 
-Downloads documents to a local directory (default: `./seeds`). Uses a built-in manifest of 12
+Downloads documents to a local directory (default: `./seeds`). Uses a built-in manifest of 14
 K8s/OLM/OpenShift/Kubebuilder docs. Pass `--manifest` to use your own URL list.
 
 ```bash
@@ -72,22 +73,28 @@ Already-indexed files are skipped. Default path: `./seeds`.
 
 See [docs/ingest.md](ingest.md) for chunking algorithm, storage schema, and scaling notes.
 
-## Full pipeline
+## mcp
+
+```bash
+./bin/go-to-rag mcp
+```
+
+Connect your knowledge base to Claude, GPT, or any MCP-compatible LLM. No local inference required.
 
 ```bash
 make build
-./bin/go-to-rag seed
-./bin/go-to-rag ingest
-./bin/go-to-rag ask "What does OLM do?"
+claude mcp add go-to-rag -- ./bin/go-to-rag mcp    # register with the Claude CLI
 ```
 
-Or run the full pipeline in one shot via Make:
+Then in a Claude session:
 
-```bash
-make run-demo                    # seed, ingest, and ask
-make run-demo WITH_FALLBACK=true # same, but allow the model to supplement retrieved context
 ```
+> use the go-to-rag tool. How does OLM work in OpenShift?
+> use the go-to-rag tool. What is a CRD and how does Kubebuilder use it?
+```
+
+See [docs/mcp.md](mcp.md) for all flags, modes, and removal instructions.
 
 ## Flags
 
-`--debug` is the only global flag (available on all subcommands). All other flags : `--host`, `--model`, `--embed-model`, `--db`, `--with-fallback` ,  are per-command. See [docs/ask.md](ask.md) and [docs/ingest.md](ingest.md) for per-command flag references.
+`--debug` is the only global flag (available on all subcommands). All other flags (`--host`, `--model`, `--embed-model`, `--db`, `--with-fallback`, `--top-k`) are per-command. See [ask.md](ask.md) and [ingest.md](ingest.md) for per-command flag references.

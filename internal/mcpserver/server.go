@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/rs/zerolog/log"
@@ -61,7 +62,9 @@ func (s *Server) ServeSSE(ctx context.Context, addr string) error {
 	srv := &http.Server{Addr: addr, Handler: handler}
 	go func() {
 		<-ctx.Done()
-		_ = srv.Shutdown(context.Background()) //nolint:contextcheck
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = srv.Shutdown(shutdownCtx)
 	}()
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
@@ -77,6 +80,8 @@ type askToRAGSystemInput struct {
 // askToRAGSystem retrieves relevant chunks from the knowledge base and returns them as LLM-ready context.
 func (s *Server) askToRAGSystem(ctx context.Context, _ *mcp.CallToolRequest, in askToRAGSystemInput) (*mcp.CallToolResult, any, error) {
 	log.Debug().Str("question", in.Question).Msg("ask_to_rag_system called")
+	ctx, cancel := context.WithTimeout(ctx, 300*time.Second)
+	defer cancel()
 	retrieved, err := s.retriever.Retrieve(ctx, in.Question, s.topK)
 	if err != nil {
 		return nil, nil, fmt.Errorf("retrieve: %w", err)
