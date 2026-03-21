@@ -124,7 +124,7 @@ func (c *Client) Chat(ctx context.Context, systemPrompt, contextBlock, userPromp
 }
 
 // buildMessages assembles the messages slice for a chat request.
-// If systemPrompt is non-empty it is prepended as a system message.
+// If systemPrompt is non-empty it overwrites the model system message.
 // If contextBlock is non-empty it is included in the user message.
 func buildMessages(systemPrompt, contextBlock, userPrompt string) []api.Message {
 	var messages []api.Message

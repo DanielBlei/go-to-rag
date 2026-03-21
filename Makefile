@@ -32,7 +32,7 @@ run-seed: build ## Seed sample documents to ./seeds
 	./bin/$(BINARY) seed
 
 run-ingest: build run-seed ## Embed seeded documents into the vector store
-	./bin/$(BINARY) --debug ingest ./seeds
+	./bin/$(BINARY) ingest ./seeds
 
 ##@ Model
 

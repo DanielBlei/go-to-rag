@@ -35,6 +35,7 @@ func (f *fakeStore) Close() error                                               
 
 // Compile-time interface validation
 var _ Embedder = (*fakeClient)(nil)
+var _ Pipeline = (*pipeline)(nil)
 
 func TestRetrieve(t *testing.T) {
 	embedErr := errors.New("embed failed")
@@ -87,5 +88,21 @@ func TestRetrieve(t *testing.T) {
 				t.Errorf("context = %q, want %q", got, tt.wantContext)
 			}
 		})
+	}
+}
+
+func TestPipeline_Retrieve(t *testing.T) {
+	store := &fakeStore{results: []vectorstore.Result{
+		{Text: "chunk one"},
+		{Text: "chunk two"},
+	}}
+	r := NewPipeline(&fakeClient{vec: []float32{1, 0, 0}}, store)
+	got, err := r.Retrieve(context.Background(), "query", 5)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := "chunk one\n---\nchunk two"
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
 	}
 }
