@@ -8,6 +8,25 @@ import (
 	"github.com/DanielBlei/go-to-rag/internal/vectorstore"
 )
 
+// Pipeline is the primary interface for the RAG retrieval pipeline.
+type Pipeline interface {
+	Retrieve(ctx context.Context, query string, limit int) (string, error)
+}
+
+type pipeline struct {
+	embedder Embedder
+	store    vectorstore.Store
+}
+
+func (p *pipeline) Retrieve(ctx context.Context, query string, limit int) (string, error) {
+	return Retrieve(ctx, query, limit, p.embedder, p.store)
+}
+
+// NewPipeline returns a Pipeline backed by the given embedder and store.
+func NewPipeline(embedder Embedder, store vectorstore.Store) Pipeline {
+	return &pipeline{embedder: embedder, store: store}
+}
+
 // Embedder is the minimal interface Retrieve needs from the ollama client.
 type Embedder interface {
 	Embed(ctx context.Context, text string) ([]float32, error)

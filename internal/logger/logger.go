@@ -4,15 +4,20 @@ import (
 	"os"
 
 	"github.com/rs/zerolog"
+	zlog "github.com/rs/zerolog/log"
 )
 
-// New returns a zerolog.Logger configured for the application.
+// New configures the global zerolog logger and returns it.
+// All packages using zerolog/log will inherit the same format and level.
 func New(debug bool) zerolog.Logger {
 	level := zerolog.InfoLevel
 	if debug {
 		level = zerolog.DebugLevel
 	}
-	return zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr}).
+	zerolog.SetGlobalLevel(level)
+	setGlobalLog := zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr}).
 		Level(level).
 		With().Timestamp().Logger()
+	zlog.Logger = setGlobalLog
+	return setGlobalLog
 }

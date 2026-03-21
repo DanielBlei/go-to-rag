@@ -26,6 +26,7 @@ Rules:
 var (
 	chatModel    string
 	withFallback bool
+	topK         int
 )
 
 func init() {
@@ -33,6 +34,7 @@ func init() {
 	addRAGFlags(askCmd)
 	askCmd.Flags().StringVar(&chatModel, "model", defaultChatModel, "Ollama chat model")
 	askCmd.Flags().BoolVar(&withFallback, "with-fallback", false, "allow the model to answer from its own knowledge when context is missing")
+	askCmd.Flags().IntVar(&topK, "top-k", 5, "number of chunks/top matches to retrieve from the vector store")
 }
 
 var askCmd = &cobra.Command{
@@ -44,6 +46,10 @@ var askCmd = &cobra.Command{
 
 func runAsk(cmd *cobra.Command, args []string) error {
 	prompt := args[0]
+
+	log.Debug().Str("model", chatModel).Str("embed-model", embedModel).
+		Str("host", host).Str("db", dbPath).Int("top-k", topK).
+		Bool("with-fallback", withFallback).Msg("initializing ask")
 
 	client, err := ollama.New(host, embedModel, chatModel)
 	if err != nil {
@@ -63,14 +69,14 @@ func runAsk(cmd *cobra.Command, args []string) error {
 			return nil
 		}
 		if errors.Is(err, context.DeadlineExceeded) {
-			return fmt.Errorf("ollama timed out, is it overloaded?")
+			return fmt.Errorf("ollama timed out, is it overloaded")
 		}
 		return fmt.Errorf("ollama validation: %w", err)
 	}
 
 	var ragPipelineContext string
 	if store != nil {
-		storeContextRetrieved, err := rag.Retrieve(cmd.Context(), prompt, 5, client, store)
+		storeContextRetrieved, err := rag.Retrieve(cmd.Context(), prompt, topK, client, store)
 		if err != nil {
 			return fmt.Errorf("retrieve failure: %w", err)
 		}
@@ -98,7 +104,6 @@ func runAsk(cmd *cobra.Command, args []string) error {
 		}
 		return fmt.Errorf("chat: %w", chatErr)
 	}
-
 	_, _ = fmt.Fprintln(os.Stdout)
 	return nil
 }
