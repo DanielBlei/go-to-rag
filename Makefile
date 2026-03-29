@@ -1,11 +1,21 @@
-BINARY     := go-to-rag
-MODEL_NAME := go-to-rag:latest
-MODELFILE  := modelfiles/llama3.2-1b.Modelfile
+PROJECT     := go-to-rag
+BINARY      := $(PROJECT)
+MODELFILE   := modelfiles/llama3.2-1b.Modelfile
+MODEL_NAME  := $(PROJECT):latest
+DEMO_PROMPT ?= How does OLM manage the lifecycle of Operators on OpenShift?
+
+WITH_FALLBACK  ?= false
+ifeq ($(WITH_FALLBACK),true)
+FALLBACK_FLAG := --with-fallback
+else
+FALLBACK_FLAG :=
+endif
 
 .DEFAULT_GOAL := help
 
 .PHONY: help build test test-v test-cover cover lint lint-fix fmt tidy \
-	clean run-demo run-seed run-ingest model-create model-delete
+	clean run-demo run-seed run-ingest model-create model-delete \
+	docker-build docker-demo docker-clean
 
 help: ## Display this help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} \
@@ -17,16 +27,9 @@ help: ## Display this help
 build: ## Build the binary
 	go build -o bin/$(BINARY) .
 
-WITH_FALLBACK ?= false
-ifeq ($(WITH_FALLBACK),true)
-FALLBACK_FLAG := --with-fallback
-else
-FALLBACK_FLAG :=
-endif
-
 run-demo: build model-delete model-create run-seed run-ingest ## Build model, seed + ingest docs, then ask a question
 	./bin/$(BINARY) ask --model $(MODEL_NAME) $(FALLBACK_FLAG) \
-		"How does OLM manage the lifecycle of Operators on OpenShift?"
+		"$(DEMO_PROMPT)"
 
 run-seed: build ## Seed sample documents to ./seeds
 	./bin/$(BINARY) seed
@@ -74,3 +77,23 @@ tidy: ## Tidy go modules
 
 clean: ## Remove build artifacts
 	rm -rf bin/
+
+##@ Docker
+
+CONTAINER_TOOL ?= $(shell (podman ps >/dev/null 2>&1 && echo podman) || (docker ps >/dev/null 2>&1 && echo docker))
+OLLAMA_HOST    ?= http://localhost:11434
+IMG            ?= $(PROJECT):latest
+
+docker-build: ## Build the container image
+	$(CONTAINER_TOOL) build -t $(IMG) .
+
+docker-demo: docker-build model-delete model-create ## Run full seed -> ingest -> ask pipeline in a container (require Ollama on host)
+	$(CONTAINER_TOOL) run --rm --network host \
+		-e OLLAMA_HOST=$(OLLAMA_HOST) \
+		-e CHAT_MODEL=$(MODEL_NAME) \
+		-e EMBED_MODEL=nomic-embed-text:latest \
+		-e DEMO_PROMPT="$(DEMO_PROMPT)" \
+		$(IMG)
+
+docker-clean: ## Remove the container image
+	$(CONTAINER_TOOL) rmi $(IMG) 2>/dev/null || true

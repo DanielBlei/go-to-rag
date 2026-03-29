@@ -33,8 +33,8 @@ Or step through the pipeline manually:
 
 ```bash
 make build
-./bin/go-to-rag seed            # download K8s/OLM/OpenShift docs to ./seeds
-./bin/go-to-rag ingest          # chunk, embed, and index into SQLite
+./bin/go-to-rag seed                      # download K8s/OLM/OpenShift docs to ./seeds
+./bin/go-to-rag ingest                    # chunk, embed, and index into SQLite
 ./bin/go-to-rag ask "What does OLM do?"   # retrieve context and stream the answer
 ```
 
@@ -72,6 +72,18 @@ Pre-tuned Modelfiles for the built-in K8s/OLM/OpenShift/Kubebuilder knowledge ba
 To switch models, update the `MODELFILE` variable at the top of the `Makefile` to point to the desired Modelfile, then run `make model-create` to rebuild.
 See [`modelfiles/README.md`](modelfiles/README.md) for VRAM requirements and parameter details.
 
+## Docker
+
+Build and run the full pipeline in a container (requires Ollama on the host). Auto-detects podman (Default) or docker:
+
+```bash
+make docker-demo
+
+# Override the prompt or force a specific runtime:
+make docker-demo DEMO_PROMPT="What is a CRD?"
+make docker-demo CONTAINER_TOOL=docker
+```
+
 ## Development
 
 ```bash
@@ -79,6 +91,11 @@ make help    # list all available targets
 make build   # build the binary
 make test    # run tests
 ```
+
+## Project Roadmap
+
+- **gRPC API** -- expose the retrieval pipeline over gRPC as an alternative to CLI and MCP
+- **Multi-agent Compose** -- domain-scoped RAG agents behind a router with concurrent fan-out queries
 
 ## Contributing
 
