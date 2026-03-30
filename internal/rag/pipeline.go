@@ -3,10 +3,32 @@ package rag
 import (
 	"context"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/DanielBlei/go-to-rag/internal/vectorstore"
 )
+
+// FallbackSystemPrompt is used when no retrieved context is available or withFallback is set.
+const FallbackSystemPrompt = `You are a helpful assistant with deep knowledge of software and AI systems.
+Answer questions clearly and concisely.
+
+Rules:
+- Use the provided context as your primary source.
+- You may supplement the context with your own knowledge to give a more complete answer.
+- When adding information not found in the context, you HAVE TO inform the user:
+  "Note: supplementing answer with my own knowledge."
+- Never fabricate facts or sources.`
+
+// ChatServer generates LLM responses from context and a prompt.
+type ChatServer interface {
+	Chat(ctx context.Context, systemPrompt, contextBlock, userPrompt string, w io.Writer) error
+}
+
+// Embedder is the minimal interface Retrieve needs from the ollama client.
+type Embedder interface {
+	Embed(ctx context.Context, text string) ([]float32, error)
+}
 
 // Pipeline is the primary interface for the RAG retrieval pipeline.
 type Pipeline interface {
@@ -30,11 +52,6 @@ func (p *pipeline) RetrieveChunks(ctx context.Context, query string, limit int) 
 // NewPipeline returns a Pipeline backed by the given embedder and store.
 func NewPipeline(embedder Embedder, store vectorstore.Store) Pipeline {
 	return &pipeline{embedder: embedder, store: store}
-}
-
-// Embedder is the minimal interface Retrieve needs from the ollama client.
-type Embedder interface {
-	Embed(ctx context.Context, text string) ([]float32, error)
 }
 
 // RetrieveChunks embeds the query, searches the store, and returns structured results.
@@ -69,4 +86,24 @@ func Retrieve(ctx context.Context, query string, limit int, client Embedder, sto
 		texts[i] = r.Text
 	}
 	return strings.Join(texts, "\n---\n"), nil
+}
+
+// Ask retrieves context via the pipeline, selects a system prompt, and streams
+// the LLM answer to w. Returns the retrieved context block so callers can
+// inspect it (e.g. to log empty results).
+func Ask(ctx context.Context, retriever Pipeline, chat ChatServer, question string, topK int, withFallback bool, w io.Writer) (string, error) {
+	contextBlock, err := retriever.Retrieve(ctx, question, topK)
+	if err != nil {
+		return "", fmt.Errorf("retrieve: %w", err)
+	}
+
+	var sysPrompt string
+	if withFallback || contextBlock == "" {
+		sysPrompt = FallbackSystemPrompt
+	}
+
+	if err := chat.Chat(ctx, sysPrompt, contextBlock, question, w); err != nil {
+		return contextBlock, fmt.Errorf("chat: %w", err)
+	}
+	return contextBlock, nil
 }

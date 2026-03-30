@@ -22,11 +22,9 @@ const (
 )
 
 type AskRequest struct {
-	state    protoimpl.MessageState `protogen:"open.v1"`
-	Question string                 `protobuf:"bytes,1,opt,name=question,proto3" json:"question,omitempty"`
-	TopK     int32                  `protobuf:"varint,2,opt,name=top_k,json=topK,proto3" json:"top_k,omitempty"`
-	// Optional chat model override. If empty, the server uses its default.
-	Model         string `protobuf:"bytes,3,opt,name=model,proto3" json:"model,omitempty"`
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Question      string                 `protobuf:"bytes,1,opt,name=question,proto3" json:"question,omitempty"`
+	TopK          int32                  `protobuf:"varint,2,opt,name=top_k,json=topK,proto3" json:"top_k,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -73,13 +71,6 @@ func (x *AskRequest) GetTopK() int32 {
 		return x.TopK
 	}
 	return 0
-}
-
-func (x *AskRequest) GetModel() string {
-	if x != nil {
-		return x.Model
-	}
-	return ""
 }
 
 type AskResponse struct {
@@ -294,12 +285,11 @@ var File_rag_v1_rag_proto protoreflect.FileDescriptor
 
 const file_rag_v1_rag_proto_rawDesc = "" +
 	"\n" +
-	"\x10rag/v1/rag.proto\x12\x06rag.v1\"S\n" +
+	"\x10rag/v1/rag.proto\x12\x06rag.v1\"=\n" +
 	"\n" +
 	"AskRequest\x12\x1a\n" +
 	"\bquestion\x18\x01 \x01(\tR\bquestion\x12\x13\n" +
-	"\x05top_k\x18\x02 \x01(\x05R\x04topK\x12\x14\n" +
-	"\x05model\x18\x03 \x01(\tR\x05model\"%\n" +
+	"\x05top_k\x18\x02 \x01(\x05R\x04topK\"%\n" +
 	"\vAskResponse\x12\x16\n" +
 	"\x06answer\x18\x01 \x01(\tR\x06answer\"H\n" +
 	"\x15RetrieveChunksRequest\x12\x1a\n" +

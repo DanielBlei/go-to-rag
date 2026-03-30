@@ -13,16 +13,6 @@ import (
 	"github.com/DanielBlei/go-to-rag/internal/vectorstore"
 )
 
-const fallbackSystemPrompt = `You are a helpful assistant with deep knowledge of software and AI systems.
-Answer questions clearly and concisely.
-
-Rules:
-- Use the provided context as your primary source.
-- You may supplement the context with your own knowledge to give a more complete answer.
-- When adding information not found in the context, you HAVE TO inform the user:
-  "Note: supplementing answer with my own knowledge."
-- Never fabricate facts or sources.`
-
 var (
 	chatModel    string
 	withFallback bool
@@ -74,26 +64,22 @@ func runAsk(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("ollama validation: %w", err)
 	}
 
-	var ragPipelineContext string
+	var chatErr error
 	if store != nil {
-		storeContextRetrieved, err := rag.Retrieve(cmd.Context(), prompt, topK, client, store)
+		pipeline := rag.NewPipeline(client, store)
+		contextBlock, err := rag.Ask(cmd.Context(), pipeline, client, prompt, topK, withFallback, os.Stdout)
 		if err != nil {
-			return fmt.Errorf("retrieve failure: %w", err)
+			chatErr = err
 		}
-		if storeContextRetrieved == "" {
+		if contextBlock == "" {
 			log.Warn().Msg("no matching chunks found")
 		}
-		ragPipelineContext = storeContextRetrieved
+		log.Debug().Str("prompt", prompt).Bool("rag", contextBlock != "").Msg("user input")
+	} else {
+		log.Debug().Str("prompt", prompt).Bool("rag", false).Msg("user input")
+		chatErr = client.Chat(cmd.Context(), rag.FallbackSystemPrompt, "", prompt, os.Stdout)
 	}
 
-	log.Debug().Str("prompt", prompt).Bool("rag", ragPipelineContext != "").Msg("user input")
-
-	var sysPrompt string
-	if withFallback || ragPipelineContext == "" {
-		sysPrompt = fallbackSystemPrompt
-	}
-
-	chatErr := client.Chat(cmd.Context(), sysPrompt, ragPipelineContext, prompt, os.Stdout)
 	if chatErr != nil {
 		if errors.Is(cmd.Context().Err(), context.Canceled) {
 			_, _ = fmt.Fprintln(os.Stdout)
