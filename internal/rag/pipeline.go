@@ -11,6 +11,7 @@ import (
 // Pipeline is the primary interface for the RAG retrieval pipeline.
 type Pipeline interface {
 	Retrieve(ctx context.Context, query string, limit int) (string, error)
+	RetrieveChunks(ctx context.Context, query string, limit int) ([]vectorstore.Result, error)
 }
 
 type pipeline struct {
@@ -20,6 +21,10 @@ type pipeline struct {
 
 func (p *pipeline) Retrieve(ctx context.Context, query string, limit int) (string, error) {
 	return Retrieve(ctx, query, limit, p.embedder, p.store)
+}
+
+func (p *pipeline) RetrieveChunks(ctx context.Context, query string, limit int) ([]vectorstore.Result, error) {
+	return RetrieveChunks(ctx, query, limit, p.embedder, p.store)
 }
 
 // NewPipeline returns a Pipeline backed by the given embedder and store.
@@ -32,17 +37,27 @@ type Embedder interface {
 	Embed(ctx context.Context, text string) ([]float32, error)
 }
 
-// Retrieve embeds the query, searches the store, and returns the top results
-// joined as a single string. Returns "" if no results are found.
-func Retrieve(ctx context.Context, query string, limit int, client Embedder, store vectorstore.Store) (string, error) {
+// RetrieveChunks embeds the query, searches the store, and returns structured results.
+func RetrieveChunks(ctx context.Context, query string, limit int, client Embedder, store vectorstore.Store) ([]vectorstore.Result, error) {
 	vec, err := client.Embed(ctx, query)
 	if err != nil {
-		return "", fmt.Errorf("embed query: %w", err)
+		return nil, fmt.Errorf("embed query: %w", err)
 	}
 
 	results, err := store.Search(ctx, vec, limit)
 	if err != nil {
-		return "", fmt.Errorf("search store: %w", err)
+		return nil, fmt.Errorf("search store: %w", err)
+	}
+
+	return results, nil
+}
+
+// Retrieve embeds the query, searches the store, and returns the top results
+// joined as a single string. Returns "" if no results are found.
+func Retrieve(ctx context.Context, query string, limit int, client Embedder, store vectorstore.Store) (string, error) {
+	results, err := RetrieveChunks(ctx, query, limit, client, store)
+	if err != nil {
+		return "", err
 	}
 
 	if len(results) == 0 {

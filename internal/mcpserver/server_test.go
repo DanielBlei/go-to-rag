@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/DanielBlei/go-to-rag/internal/vectorstore"
 )
 
 // fakeRetriever implements rag.Pipeline for testing.
@@ -17,6 +19,10 @@ type fakeRetriever struct {
 
 func (f *fakeRetriever) Retrieve(_ context.Context, _ string, _ int) (string, error) {
 	return f.context, f.err
+}
+
+func (f *fakeRetriever) RetrieveChunks(_ context.Context, _ string, _ int) ([]vectorstore.Result, error) {
+	return nil, f.err
 }
 
 // connectClient connects an in-memory client to the server's MCP instance and

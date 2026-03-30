@@ -68,7 +68,7 @@ proto: ## Generate Go code from protobuf definitions
 
 lint: ## Run linters
 	golangci-lint run ./...
-	buf lint && echo "proto: ok"
+	@buf lint && echo "proto: ok"
 
 lint-fix: ## Run linter with auto-fix
 	golangci-lint run --fix ./...
