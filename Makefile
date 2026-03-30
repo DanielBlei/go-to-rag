@@ -61,8 +61,9 @@ cover: test-cover ## Run tests and open coverage report in browser
 
 ##@ Code Quality
 
-lint: ## Run linter
+lint: ## Run linters
 	golangci-lint run ./...
+	buf lint && echo "proto: ok"
 
 lint-fix: ## Run linter with auto-fix
 	golangci-lint run --fix ./...

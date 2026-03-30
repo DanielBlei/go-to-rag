@@ -26,6 +26,10 @@ jobs:
       - uses: golangci/golangci-lint-action@v9
         with:
           version: latest
+      - uses: bufbuild/buf-action@v1
+        with:
+          lint: true
+          format: false
 
   build:
     name: Build
