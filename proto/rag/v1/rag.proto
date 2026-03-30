@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package rag.v1;
+
+option go_package = "github.com/DanielBlei/go-to-rag/internal/gen/rag/v1;ragv1";
+
+// RAGService exposes the retrieval-augmented generation pipeline over gRPC.
+service RAGService {
+  // Ask queries the knowledge base and returns an LLM-generated answer
+  // grounded in the retrieved context.
+  rpc Ask(AskRequest) returns (AskResponse);
+
+  // RetrieveChunks returns scored chunks from the vector store without
+  // LLM generation. Designed for service-to-service use where the caller
+  // handles generation.
+  rpc RetrieveChunks(RetrieveChunksRequest) returns (RetrieveChunksResponse);
+}
+
+message AskRequest {
+  string question = 1;
+  int32 top_k = 2;
+  // Optional chat model override. If empty, the server uses its default.
+  string model = 3;
+}
+
+message AskResponse {
+  string answer = 1;
+}
+
+message RetrieveChunksRequest {
+  string question = 1;
+  int32 top_k = 2;
+}
+
+message RetrieveChunksResponse {
+  repeated Chunk chunks = 1;
+}
+
+message Chunk {
+  string text = 1;
+  string source = 2;
+  double score = 3;
+  int32 chunk_index = 4;
+}
