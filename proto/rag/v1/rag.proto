@@ -19,8 +19,6 @@ service RAGService {
 message AskRequest {
   string question = 1;
   int32 top_k = 2;
-  // Optional chat model override. If empty, the server uses its default.
-  string model = 3;
 }
 
 message AskResponse {
