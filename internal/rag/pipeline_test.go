@@ -91,6 +91,76 @@ func TestRetrieve(t *testing.T) {
 	}
 }
 
+func TestRetrieveChunks(t *testing.T) {
+	embedErr := errors.New("embed failed")
+	searchErr := errors.New("search failed")
+
+	tests := []struct {
+		name    string
+		client  *fakeClient
+		store   *fakeStore
+		want    []vectorstore.Result
+		wantErr error
+	}{
+		{
+			name:   "returns structured results",
+			client: &fakeClient{vec: []float32{1, 0, 0}},
+			store: &fakeStore{results: []vectorstore.Result{
+				{Source: "k8s.md", Text: "chunk one", ChunkIndex: 0, Score: 0.95},
+				{Source: "k8s.md", Text: "chunk two", ChunkIndex: 1, Score: 0.80},
+			}},
+			want: []vectorstore.Result{
+				{Source: "k8s.md", Text: "chunk one", ChunkIndex: 0, Score: 0.95},
+				{Source: "k8s.md", Text: "chunk two", ChunkIndex: 1, Score: 0.80},
+			},
+		},
+		{
+			name:   "empty store returns nil",
+			client: &fakeClient{vec: []float32{1, 0, 0}},
+			store:  &fakeStore{results: nil},
+			want:   nil,
+		},
+		{
+			name:    "embed error is propagated",
+			client:  &fakeClient{err: embedErr},
+			store:   &fakeStore{},
+			wantErr: embedErr,
+		},
+		{
+			name:    "search error is propagated",
+			client:  &fakeClient{vec: []float32{1, 0, 0}},
+			store:   &fakeStore{err: searchErr},
+			wantErr: searchErr,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := RetrieveChunks(context.Background(), "query", 5, tt.client, tt.store)
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if len(got) != len(tt.want) {
+				t.Fatalf("got %d results, want %d", len(got), len(tt.want))
+			}
+			for i, r := range got {
+				if r.Source != tt.want[i].Source {
+					t.Errorf("result[%d].Source = %q, want %q", i, r.Source, tt.want[i].Source)
+				}
+				if r.Text != tt.want[i].Text {
+					t.Errorf("result[%d].Text = %q, want %q", i, r.Text, tt.want[i].Text)
+				}
+				if r.ChunkIndex != tt.want[i].ChunkIndex {
+					t.Errorf("result[%d].ChunkIndex = %d, want %d", i, r.ChunkIndex, tt.want[i].ChunkIndex)
+				}
+				if r.Score != tt.want[i].Score {
+					t.Errorf("result[%d].Score = %f, want %f", i, r.Score, tt.want[i].Score)
+				}
+			}
+		})
+	}
+}
+
 func TestPipeline_Retrieve(t *testing.T) {
 	store := &fakeStore{results: []vectorstore.Result{
 		{Text: "chunk one"},
