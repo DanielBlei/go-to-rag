@@ -15,7 +15,7 @@ endif
 
 .PHONY: help build test test-v test-cover cover lint lint-fix fmt tidy \
 	clean run-demo run-seed run-ingest model-create model-delete \
-	docker-build docker-demo docker-clean
+	docker-build docker-demo docker-clean proto
 
 help: ## Display this help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} \
@@ -58,6 +58,11 @@ test-cover: ## Run tests and write coverage profile
 
 cover: test-cover ## Run tests and open coverage report in browser
 	go tool cover -html=coverage.out
+
+##@ Code Generation
+
+proto: ## Generate Go code from protobuf definitions
+	buf generate
 
 ##@ Code Quality
 
