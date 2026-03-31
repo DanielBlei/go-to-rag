@@ -49,9 +49,6 @@ func runIngest(cmd *cobra.Command, args []string) error {
 	}
 
 	if err := client.Validate(cmd.Context(), true, false); err != nil {
-		if errors.Is(cmd.Context().Err(), context.Canceled) {
-			return nil
-		}
 		if errors.Is(err, context.DeadlineExceeded) {
 			return fmt.Errorf("ollama timed out, is it overloaded")
 		}
@@ -114,9 +111,6 @@ func runIngest(cmd *cobra.Command, args []string) error {
 
 			emb, err := client.Embed(cmd.Context(), c.Text)
 			if err != nil {
-				if errors.Is(cmd.Context().Err(), context.Canceled) {
-					return nil
-				}
 				ingestErr = fmt.Errorf("embed chunk %d of %q: %w", c.Index, absPath, err)
 				break
 			}

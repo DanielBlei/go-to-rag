@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/signal"
 	"syscall"
@@ -74,5 +75,9 @@ func addRAGFlags(cmd *cobra.Command) {
 func Execute() error {
 	ctx, cancel := withSignalCancel(context.Background())
 	defer cancel()
-	return rootCmd.ExecuteContext(ctx)
+	err := rootCmd.ExecuteContext(ctx)
+	if errors.Is(err, context.Canceled) {
+		return nil
+	}
+	return err
 }

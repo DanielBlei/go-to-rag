@@ -49,10 +49,10 @@ func New(host, embedModel, chatModel string) (*Client, error) {
 // Validate confirms that Ollama is reachable and the required models are available.
 func (c *Client) Validate(ctx context.Context, checkEmbed, checkChat bool) error {
 	c.validateOnce.Do(func() {
-		tctx, cancel := context.WithTimeout(ctx, defaultTimeout)
+		validateCtx, cancel := context.WithTimeout(ctx, defaultTimeout)
 		defer cancel()
 
-		resp, err := c.api.List(tctx)
+		resp, err := c.api.List(validateCtx)
 		if err != nil {
 			c.validateErr = fmt.Errorf("connect to ollama: %w", err)
 			return
