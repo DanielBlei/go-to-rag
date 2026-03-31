@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"strings"
 	"testing"
 
 	"google.golang.org/grpc"
@@ -156,6 +157,28 @@ func TestRetrieveChunks_fieldRoundTrip(t *testing.T) {
 	}
 }
 
+// drainAsk opens an Ask stream and concatenates all token chunks into a single
+// string. Errors from stream establishment or Recv are returned directly.
+func drainAsk(t *testing.T, client ragv1.RAGServiceClient, req *ragv1.AskRequest) (string, error) {
+	t.Helper()
+	stream, err := client.Ask(context.Background(), req)
+	if err != nil {
+		return "", err
+	}
+	var sb strings.Builder
+	for {
+		msg, err := stream.Recv()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return "", err
+		}
+		sb.WriteString(msg.GetAnswer())
+	}
+	return sb.String(), nil
+}
+
 func TestAsk(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -165,7 +188,7 @@ func TestAsk(t *testing.T) {
 		wantErr    bool
 	}{
 		{
-			name: "returns generated answer",
+			name: "streams and assembles generated answer",
 			retriever: &fakeRetriever{chunks: []vectorstore.Result{
 				{Text: "pods are the smallest deployable unit"},
 			}},
@@ -179,10 +202,10 @@ func TestAsk(t *testing.T) {
 			wantAnswer: "I don't have context for that.",
 		},
 		{
-			name:       "retriever error propagates",
-			retriever:  &fakeRetriever{err: errors.New("embed failed")},
+			name:      "retriever error propagates",
+			retriever: &fakeRetriever{err: errors.New("embed failed")},
 			chatServer: &fakeChatServer{},
-			wantErr:    true,
+			wantErr:   true,
 		},
 		{
 			name: "chat error propagates",
@@ -199,9 +222,7 @@ func TestAsk(t *testing.T) {
 			srv := New(tt.retriever, tt.chatServer, 10, false)
 			client := dialBufconn(t, srv)
 
-			resp, err := client.Ask(context.Background(), &ragv1.AskRequest{
-				Question: "what are pods?",
-			})
+			answer, err := drainAsk(t, client, &ragv1.AskRequest{Question: "what are pods?"})
 			if tt.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")
@@ -211,8 +232,8 @@ func TestAsk(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if resp.GetAnswer() != tt.wantAnswer {
-				t.Errorf("answer = %q, want %q", resp.GetAnswer(), tt.wantAnswer)
+			if answer != tt.wantAnswer {
+				t.Errorf("answer = %q, want %q", answer, tt.wantAnswer)
 			}
 		})
 	}

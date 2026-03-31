@@ -29,9 +29,11 @@ const (
 //
 // RAGService exposes the retrieval-augmented generation pipeline over gRPC.
 type RAGServiceClient interface {
-	// Ask queries the knowledge base and returns an LLM-generated answer
-	// grounded in the retrieved context.
-	Ask(ctx context.Context, in *AskRequest, opts ...grpc.CallOption) (*AskResponse, error)
+	// Ask queries the knowledge base and streams an LLM-generated answer
+	// grounded in the retrieved context. Each response message carries a token
+	// chunk so callers can display output incrementally or collect all chunks
+	// and act on the full answer once the stream closes.
+	Ask(ctx context.Context, in *AskRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[AskResponse], error)
 	// RetrieveChunks returns scored chunks from the vector store without
 	// LLM generation. Designed for service-to-service use where the caller
 	// handles generation.
@@ -46,15 +48,24 @@ func NewRAGServiceClient(cc grpc.ClientConnInterface) RAGServiceClient {
 	return &rAGServiceClient{cc}
 }
 
-func (c *rAGServiceClient) Ask(ctx context.Context, in *AskRequest, opts ...grpc.CallOption) (*AskResponse, error) {
+func (c *rAGServiceClient) Ask(ctx context.Context, in *AskRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[AskResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(AskResponse)
-	err := c.cc.Invoke(ctx, RAGService_Ask_FullMethodName, in, out, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &RAGService_ServiceDesc.Streams[0], RAGService_Ask_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	return out, nil
+	x := &grpc.GenericClientStream[AskRequest, AskResponse]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
 }
+
+// RAGService_AskClient is the client streaming interface for Ask.
+type RAGService_AskClient = grpc.ServerStreamingClient[AskResponse]
 
 func (c *rAGServiceClient) RetrieveChunks(ctx context.Context, in *RetrieveChunksRequest, opts ...grpc.CallOption) (*RetrieveChunksResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
@@ -72,15 +83,20 @@ func (c *rAGServiceClient) RetrieveChunks(ctx context.Context, in *RetrieveChunk
 //
 // RAGService exposes the retrieval-augmented generation pipeline over gRPC.
 type RAGServiceServer interface {
-	// Ask queries the knowledge base and returns an LLM-generated answer
-	// grounded in the retrieved context.
-	Ask(context.Context, *AskRequest) (*AskResponse, error)
+	// Ask queries the knowledge base and streams an LLM-generated answer
+	// grounded in the retrieved context. Each response message carries a token
+	// chunk so callers can display output incrementally or collect all chunks
+	// and act on the full answer once the stream closes.
+	Ask(*AskRequest, grpc.ServerStreamingServer[AskResponse]) error
 	// RetrieveChunks returns scored chunks from the vector store without
 	// LLM generation. Designed for service-to-service use where the caller
 	// handles generation.
 	RetrieveChunks(context.Context, *RetrieveChunksRequest) (*RetrieveChunksResponse, error)
 	mustEmbedUnimplementedRAGServiceServer()
 }
+
+// RAGService_AskServer is the server streaming interface for Ask.
+type RAGService_AskServer = grpc.ServerStreamingServer[AskResponse]
 
 // UnimplementedRAGServiceServer must be embedded to have
 // forward compatible implementations.
@@ -89,8 +105,8 @@ type RAGServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedRAGServiceServer struct{}
 
-func (UnimplementedRAGServiceServer) Ask(context.Context, *AskRequest) (*AskResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method Ask not implemented")
+func (UnimplementedRAGServiceServer) Ask(*AskRequest, grpc.ServerStreamingServer[AskResponse]) error {
+	return status.Error(codes.Unimplemented, "method Ask not implemented")
 }
 func (UnimplementedRAGServiceServer) RetrieveChunks(context.Context, *RetrieveChunksRequest) (*RetrieveChunksResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RetrieveChunks not implemented")
@@ -116,22 +132,12 @@ func RegisterRAGServiceServer(s grpc.ServiceRegistrar, srv RAGServiceServer) {
 	s.RegisterService(&RAGService_ServiceDesc, srv)
 }
 
-func _RAGService_Ask_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(AskRequest)
-	if err := dec(in); err != nil {
-		return nil, err
+func _RAGService_Ask_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(AskRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
 	}
-	if interceptor == nil {
-		return srv.(RAGServiceServer).Ask(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: RAGService_Ask_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RAGServiceServer).Ask(ctx, req.(*AskRequest))
-	}
-	return interceptor(ctx, in, info, handler)
+	return srv.(RAGServiceServer).Ask(m, &grpc.GenericServerStream[AskRequest, AskResponse]{ServerStream: stream})
 }
 
 func _RAGService_RetrieveChunks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -160,14 +166,16 @@ var RAGService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*RAGServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "Ask",
-			Handler:    _RAGService_Ask_Handler,
-		},
-		{
 			MethodName: "RetrieveChunks",
 			Handler:    _RAGService_RetrieveChunks_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "Ask",
+			Handler:       _RAGService_Ask_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "rag/v1/rag.proto",
 }

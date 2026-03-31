@@ -1,8 +1,8 @@
 package grpcserver
 
 import (
-	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"net"
 
@@ -26,49 +26,66 @@ type Server struct {
 }
 
 // New creates a gRPC server backed by the given Pipeline and ChatServer.
-func New(retriever rag.Pipeline, chatServer rag.ChatServer, topK int, withFallback bool) *Server {
+// opts are forwarded to grpc.NewServer and can be used to configure TLS,
+// interceptors, and other server-level options.
+func New(retriever rag.Pipeline, chatServer rag.ChatServer, topK int, withFallback bool, opts ...grpc.ServerOption) *Server {
 	s := &Server{
 		retriever:    retriever,
 		chatServer:   chatServer,
 		topK:         topK,
 		withFallback: withFallback,
 	}
-	s.srv = grpc.NewServer()
+	s.srv = grpc.NewServer(opts...)
 	ragv1.RegisterRAGServiceServer(s.srv, s)
 	return s
 }
 
-func retrieveQuestion(question string) (string, error) {
+func validateQuestion(question string) (string, error) {
 	if question == "" {
 		return "", status.Error(codes.InvalidArgument, "question is required")
 	}
 	return question, nil
 }
 
-// Ask queries the knowledge base and returns an LLM-generated answer.
-func (s *Server) Ask(ctx context.Context, req *ragv1.AskRequest) (*ragv1.AskResponse, error) {
-	question, err := retrieveQuestion(req.Question)
+// streamWriter bridges rag.Ask's io.Writer interface to a gRPC server stream,
+// forwarding each token chunk as an AskResponse message.
+type streamWriter struct {
+	stream ragv1.RAGService_AskServer
+}
+
+func (sw *streamWriter) Write(p []byte) (int, error) {
+	if err := sw.stream.Send(&ragv1.AskResponse{Answer: string(p)}); err != nil {
+		return 0, err
+	}
+	return len(p), nil
+}
+
+// Ask queries the knowledge base and streams the LLM-generated answer token by token.
+// Clients may consume tokens incrementally or drain the stream and concatenate all Answer fields for full response.
+func (s *Server) Ask(req *ragv1.AskRequest, stream ragv1.RAGService_AskServer) error {
+	question, err := validateQuestion(req.Question)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	// option to overwrite the topK matches from server defaults
 	topK := int(req.GetTopK())
 	if topK <= 0 {
 		topK = s.topK
 	}
 
-	var buf bytes.Buffer
-	if _, err := rag.Ask(ctx, s.retriever, s.chatServer, question, topK, s.withFallback, &buf); err != nil {
-		return nil, status.Errorf(codes.Internal, "%v", err)
+	ctx := stream.Context()
+	if _, err := rag.Ask(ctx, s.retriever, s.chatServer, question, topK, s.withFallback, &streamWriter{stream}); err != nil {
+		if errors.Is(ctx.Err(), context.Canceled) {
+			return status.Error(codes.Canceled, "request cancelled")
+		}
+		return status.Errorf(codes.Internal, "ask: %v", err)
 	}
-
-	return &ragv1.AskResponse{Answer: buf.String()}, nil
+	return nil
 }
 
 // RetrieveChunks returns scored chunks from the vector store.
 func (s *Server) RetrieveChunks(ctx context.Context, req *ragv1.RetrieveChunksRequest) (*ragv1.RetrieveChunksResponse, error) {
-	question, err := retrieveQuestion(req.Question)
+	question, err := validateQuestion(req.Question)
 	if err != nil {
 		return nil, err
 	}
@@ -81,6 +98,9 @@ func (s *Server) RetrieveChunks(ctx context.Context, req *ragv1.RetrieveChunksRe
 
 	chunks, err := s.retriever.RetrieveChunks(ctx, question, topK)
 	if err != nil {
+		if errors.Is(ctx.Err(), context.Canceled) {
+			return nil, status.Error(codes.Canceled, "request cancelled")
+		}
 		return nil, status.Errorf(codes.Internal, "retrieve chunks: %v", err)
 	}
 
