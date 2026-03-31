@@ -16,6 +16,7 @@ ollama pull nomic-embed-text:latest
 ./bin/go-to-rag seed [directory]     # download documents for ingestion
 ./bin/go-to-rag ingest [path]        # embed documents into the vector store
 ./bin/go-to-rag mcp                  # start the MCP server for external LLM integration
+./bin/go-to-rag serve                # start the gRPC server on :50051
 ```
 
 ## ask
@@ -94,6 +95,25 @@ Then in a Claude session:
 ```
 
 See [docs/mcp.md](mcp.md) for all flags, modes, and removal instructions.
+
+## serve
+
+```bash
+./bin/go-to-rag serve
+```
+
+Starts a gRPC server (default `:50051`) exposing two RPCs:
+
+- **Ask** — streams a RAG-augmented answer token by token
+- **RetrieveChunks** — returns scored chunks without generation, for service-to-service use
+
+```bash
+./bin/go-to-rag serve                                   # listen on :50051
+./bin/go-to-rag serve --grpc-addr :9090                 # custom port
+./bin/go-to-rag serve --model llama3.1:8b --top-k 5     # override model and retrieval depth
+```
+
+See [docs/serve.md](serve.md) for all flags, RPCs, and grpcurl examples.
 
 ## Flags
 
