@@ -9,6 +9,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
 
 	ragv1 "github.com/DanielBlei/go-to-rag/internal/gen/rag/v1"
@@ -18,28 +19,31 @@ import (
 // Server wraps a rag.Pipeline and serves it over gRPC.
 type Server struct {
 	ragv1.UnimplementedRAGServiceServer
-	retriever    rag.Pipeline
-	chatServer   rag.ChatServer
-	topK         int
-	withFallback bool
-	srv          *grpc.Server
+	retriever         rag.Pipeline
+	chatServer        rag.ChatServer
+	topK              int
+	serveWithFallback bool
+	srv               *grpc.Server
 }
 
 // New creates a gRPC server backed by the given Pipeline and ChatServer.
 // opts are forwarded to grpc.NewServer and can be used to configure TLS,
 // interceptors, and other server-level options.
-func New(retriever rag.Pipeline, chatServer rag.ChatServer, topK int, withFallback bool, opts ...grpc.ServerOption) *Server {
+func New(retriever rag.Pipeline, chatServer rag.ChatServer, topK int, serveWithFallback bool, opts ...grpc.ServerOption) *Server {
 	s := &Server{
-		retriever:    retriever,
-		chatServer:   chatServer,
-		topK:         topK,
-		withFallback: withFallback,
+		retriever:         retriever,
+		chatServer:        chatServer,
+		topK:              topK,
+		serveWithFallback: serveWithFallback,
 	}
 	s.srv = grpc.NewServer(opts...)
 	ragv1.RegisterRAGServiceServer(s.srv, s)
+	reflection.Register(s.srv)
 	return s
 }
 
+// validateQuestion check if questions is valid
+// placeholder for potential future checks
 func validateQuestion(question string) (string, error) {
 	if question == "" {
 		return "", status.Error(codes.InvalidArgument, "question is required")
@@ -68,13 +72,15 @@ func (s *Server) Ask(req *ragv1.AskRequest, stream ragv1.RAGService_AskServer) e
 		return err
 	}
 
+	log.Info().Str("question", question).Msg("Ask")
+
 	topK := int(req.GetTopK())
 	if topK <= 0 {
 		topK = s.topK
 	}
 
 	ctx := stream.Context()
-	if _, err := rag.Ask(ctx, s.retriever, s.chatServer, question, topK, s.withFallback, &streamWriter{stream}); err != nil {
+	if _, err := rag.Ask(ctx, s.retriever, s.chatServer, question, topK, s.serveWithFallback, &streamWriter{stream}); err != nil {
 		if errors.Is(ctx.Err(), context.Canceled) {
 			return status.Error(codes.Canceled, "request cancelled")
 		}
@@ -89,6 +95,8 @@ func (s *Server) RetrieveChunks(ctx context.Context, req *ragv1.RetrieveChunksRe
 	if err != nil {
 		return nil, err
 	}
+
+	log.Info().Str("question", question).Msg("RetrieveChunks")
 
 	// option to overwrite the topK matches from server defaults
 	topK := int(req.GetTopK())

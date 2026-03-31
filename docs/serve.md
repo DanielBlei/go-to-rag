@@ -1,0 +1,56 @@
+# serve
+
+Start a gRPC server that exposes the RAG pipeline over two RPCs.
+
+```bash
+./bin/go-to-rag serve
+```
+
+## Flags
+
+| Flag              | Default                   | Description                                                              |
+|-------------------|---------------------------|--------------------------------------------------------------------------|
+| `--grpc-addr`     | `:50051`                  | Listen address                                                           |
+| `--top-k`         | `10`                      | Default number of chunks to retrieve per request                         |
+| `--model`         | `llama3.2:1b`             | Ollama chat model (used by `Ask`)                                        |
+| `--with-fallback` | `false`                   | Allow the model to answer from its own knowledge when context is missing |
+| `--host`          | `http://localhost:11434`  | Ollama host URL                                                          |
+| `--embed-model`   | `nomic-embed-text:latest` | Embedding model                                                          |
+| `--db`            | `./data/index.db`         | Vector store database path                                               |
+
+## RPCs
+
+### Ask (server-streaming)
+
+Retrieves the top-k chunks, injects them as context, and streams the LLM response token by token.
+
+Request fields: `question` (string), `top_k` (int32, overrides server default if > 0).
+
+```bash
+grpcurl -plaintext \
+  -import-path . -proto proto/rag/v1/rag.proto \
+  -d '{"question": "What does OLM do?", "top_k": 5}' \
+  localhost:50051 rag.v1.RAGService/Ask
+```
+
+### RetrieveChunks (unary)
+
+Returns scored chunks without running generation. Useful for service-to-service retrieval where the caller handles its own LLM step.
+
+Request fields: `question` (string), `top_k` (int32). Response: list of chunks with `text`, `source`, `score`, and `chunk_index`.
+
+```bash
+grpcurl -plaintext \
+  -d '{"question": "What is a CRD?", "top_k": 3}' \
+  localhost:50051 rag.v1.RAGService/RetrieveChunks
+```
+
+## Service definition
+
+See [`proto/rag/v1/rag.proto`](../proto/rag/v1/rag.proto). To regenerate Go stubs after editing the proto:
+
+```bash
+make proto
+```
+
+See [docs/protobuf.md](protobuf.md) for the full codegen workflow.

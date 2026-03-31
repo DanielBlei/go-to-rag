@@ -4,6 +4,7 @@
 ![Ollama](https://img.shields.io/badge/Ollama-local-black?style=flat&logo=ollama&logoColor=white)
 ![SQLite](https://img.shields.io/badge/SQLite-WAL-003B57?style=flat&logo=sqlite&logoColor=white)
 ![MCP](https://img.shields.io/badge/MCP-compatible-6B4FBB?style=flat&logo=anthropic&logoColor=white)
+![gRPC](https://img.shields.io/badge/gRPC-50051-244c5a?style=flat&logo=grpc)
 ![License](https://img.shields.io/badge/License-Apache%202.0-blue?style=flat)
 
 A local RAG (Retrieval-Augmented Generation) engine written in Go, powered by [Ollama](https://ollama.com).
@@ -12,7 +13,7 @@ Run fully local with Ollama, or connect your knowledge base to Claude, GPT, or a
 
 ## Requirements
 
-- Go 1.22+
+- Go 1.25+
 - [Ollama](https://ollama.com) 0.5+, running locally
 - Models pulled:
 
@@ -48,6 +49,7 @@ See [docs/quickstart.md](docs/quickstart.md) for the full pipeline walkthrough a
 | `seed [dir]` | Download K8s/OLM/OpenShift docs for ingestion (default: `./seeds`) |
 | `ingest [path]` | Chunk, embed, and index documents into SQLite (default: `./seeds`) |
 | `mcp` | Start the MCP server for external LLM integration (stdio by default, SSE with `--addr`) |
+| `serve` | Start the gRPC server (default `:50051`); exposes `Ask` (streaming) and `RetrieveChunks` RPCs |
 
 ## Stack
 
@@ -58,6 +60,8 @@ See [docs/quickstart.md](docs/quickstart.md) for the full pipeline walkthrough a
 | Vector store | SQLite (WAL mode) | Zero-dependency MVP; swappable via `Store` interface |
 | Chat | Ollama (local) | Self-contained, fully local inference |
 | MCP SDK | [`modelcontextprotocol/go-sdk`](https://github.com/modelcontextprotocol/go-sdk) | Official Go MCP SDK for tool registration, stdio and SSE transport |
+| gRPC | `google.golang.org/grpc` + protobuf | RPC interface for service-to-service and programmatic access |
+| Protobuf | `buf` CLI | Schema definition, linting, and Go stub generation |
 | CLI | Cobra | Subcommand structure with per-command flags |
 
 ## Models
@@ -90,11 +94,11 @@ make docker-demo CONTAINER_TOOL=docker
 make help    # list all available targets
 make build   # build the binary
 make test    # run tests
+make proto   # regenerate Go stubs from proto/rag/v1/rag.proto
 ```
 
 ## Project Roadmap
 
-- **gRPC API** -- expose the retrieval pipeline over gRPC as an alternative to CLI and MCP
 - **Multi-agent Compose** -- domain-scoped RAG agents behind a router with concurrent fan-out queries
 
 ## Contributing
