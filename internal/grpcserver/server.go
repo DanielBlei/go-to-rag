@@ -9,6 +9,8 @@ import (
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/health"
+	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
 
@@ -39,6 +41,12 @@ func New(retriever rag.Pipeline, chatServer rag.ChatServer, topK int, serveWithF
 	s.srv = grpc.NewServer(opts...)
 	ragv1.RegisterRAGServiceServer(s.srv, s)
 	reflection.Register(s.srv)
+
+	healthSrv := health.NewServer()
+	grpc_health_v1.RegisterHealthServer(s.srv, healthSrv)
+	healthSrv.SetServingStatus("", grpc_health_v1.HealthCheckResponse_SERVING)
+	healthSrv.SetServingStatus("rag.v1.RAGService", grpc_health_v1.HealthCheckResponse_SERVING)
+
 	return s
 }
 
@@ -80,11 +88,15 @@ func (s *Server) Ask(req *ragv1.AskRequest, stream ragv1.RAGService_AskServer) e
 	}
 
 	ctx := stream.Context()
-	if _, err := rag.Ask(ctx, s.retriever, s.chatServer, question, topK, s.serveWithFallback, &streamWriter{stream}); err != nil {
-		if errors.Is(ctx.Err(), context.Canceled) {
+	_, askErr := rag.Ask(ctx, s.retriever, s.chatServer, question, topK, s.serveWithFallback, &streamWriter{stream})
+	if askErr != nil {
+		if errors.Is(askErr, context.DeadlineExceeded) {
+			return status.Error(codes.DeadlineExceeded, "request timed out")
+		}
+		if errors.Is(askErr, context.Canceled) {
 			return status.Error(codes.Canceled, "request cancelled")
 		}
-		return status.Errorf(codes.Internal, "ask: %v", err)
+		return status.Errorf(codes.Internal, "ask: %v", askErr)
 	}
 	return nil
 }
@@ -106,7 +118,10 @@ func (s *Server) RetrieveChunks(ctx context.Context, req *ragv1.RetrieveChunksRe
 
 	chunks, err := s.retriever.RetrieveChunks(ctx, question, topK)
 	if err != nil {
-		if errors.Is(ctx.Err(), context.Canceled) {
+		if errors.Is(err, context.DeadlineExceeded) {
+			return nil, status.Error(codes.DeadlineExceeded, "request timed out")
+		}
+		if errors.Is(err, context.Canceled) {
 			return nil, status.Error(codes.Canceled, "request cancelled")
 		}
 		return nil, status.Errorf(codes.Internal, "retrieve chunks: %v", err)
@@ -126,23 +141,33 @@ func (s *Server) RetrieveChunks(ctx context.Context, req *ragv1.RetrieveChunksRe
 	return resp, nil
 }
 
-// Serve starts the gRPC server on the given address and blocks until
-// the context is cancelled.
+// ServeListener starts the gRPC server on the given listener and blocks until the context is cancelled.
+// Use this when the caller pre-binds the port (e.g. in tests to avoid listen-close-rebind races).
+func (s *Server) ServeListener(ctx context.Context, lis net.Listener) error {
+	done := make(chan struct{})
+	defer close(done)
+
+	go func() {
+		select {
+		case <-ctx.Done():
+			log.Info().Msg("gRPC server: graceful shutdown")
+			s.srv.GracefulStop()
+		case <-done:
+		}
+	}()
+
+	log.Info().Str("addr", lis.Addr().String()).Msg("gRPC server listening")
+	if err := s.srv.Serve(lis); err != nil {
+		return fmt.Errorf("grpc serve: %w", err)
+	}
+	return nil
+}
+
+// Serve starts the gRPC server on the given address and blocks until the context is cancelled.
 func (s *Server) Serve(ctx context.Context, addr string) error {
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("listen %s: %w", addr, err)
 	}
-
-	go func() {
-		<-ctx.Done()
-		log.Info().Msg("gRPC server: graceful shutdown")
-		s.srv.GracefulStop()
-	}()
-
-	log.Info().Str("addr", addr).Msg("gRPC server listening")
-	if err := s.srv.Serve(lis); err != nil {
-		return fmt.Errorf("grpc serve: %w", err)
-	}
-	return nil
+	return s.ServeListener(ctx, lis)
 }

@@ -78,6 +78,9 @@ func runAsk(cmd *cobra.Command, args []string) error {
 	}
 
 	if chatErr != nil {
+		// Move the cursor to a new line if the user interrupted mid-stream.
+		// context.Canceled itself is handled in Execute().
+		// This guard exists only to flush a trailing newline before the clean exit.
 		if errors.Is(cmd.Context().Err(), context.Canceled) {
 			_, _ = fmt.Fprintln(os.Stdout)
 			return nil

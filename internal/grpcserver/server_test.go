@@ -7,9 +7,13 @@ import (
 	"net"
 	"strings"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/health/grpc_health_v1"
+	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
 
 	ragv1 "github.com/DanielBlei/go-to-rag/internal/gen/rag/v1"
@@ -30,6 +34,25 @@ func (f *fakeRetriever) RetrieveChunks(_ context.Context, _ string, _ int) ([]ve
 	return f.chunks, f.err
 }
 
+// slowFakeRetriever simulates a slow operation that respects context cancellation.
+type slowFakeRetriever struct {
+	chunks []vectorstore.Result
+	delay  time.Duration
+}
+
+func (f *slowFakeRetriever) Retrieve(_ context.Context, _ string, _ int) (string, error) {
+	return "slow", nil
+}
+
+func (f *slowFakeRetriever) RetrieveChunks(ctx context.Context, _ string, _ int) ([]vectorstore.Result, error) {
+	select {
+	case <-time.After(f.delay):
+		return f.chunks, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
 type fakeChatServer struct {
 	response string
 	err      error
@@ -43,12 +66,43 @@ func (f *fakeChatServer) Chat(_ context.Context, _, _, _ string, w io.Writer) er
 	return nil
 }
 
+// slowFakeChatServer delays before writing to simulate a slow operation that respects cancellation.
+type slowFakeChatServer struct {
+	response string
+	err      error
+	delay    time.Duration
+}
+
+func (f *slowFakeChatServer) Chat(ctx context.Context, _, _, _ string, w io.Writer) error {
+	if f.err != nil {
+		return f.err
+	}
+	// Simulate a slow operation that respects context cancellation
+	select {
+	case <-time.After(f.delay):
+		_, _ = w.Write([]byte(f.response))
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
 func dialBufconn(t *testing.T, s *Server) ragv1.RAGServiceClient {
+	t.Helper()
+	conn := dialBufconnConn(t, s)
+	return ragv1.NewRAGServiceClient(conn)
+}
+
+func dialBufconnConn(t *testing.T, s *Server) *grpc.ClientConn {
 	t.Helper()
 	lis := bufconn.Listen(1024 * 1024)
 	t.Cleanup(func() { _ = lis.Close() })
 
-	go func() { _ = s.srv.Serve(lis) }()
+	go func() {
+		if err := s.srv.Serve(lis); err != nil {
+			t.Logf("server error: %v", err)
+		}
+	}()
 	t.Cleanup(func() { s.srv.GracefulStop() })
 
 	conn, err := grpc.NewClient("passthrough:///bufconn",
@@ -61,7 +115,7 @@ func dialBufconn(t *testing.T, s *Server) ragv1.RAGServiceClient {
 		t.Fatalf("dial bufconn: %v", err)
 	}
 	t.Cleanup(func() { _ = conn.Close() })
-	return ragv1.NewRAGServiceClient(conn)
+	return conn
 }
 
 func TestRetrieveChunks(t *testing.T) {
@@ -159,9 +213,9 @@ func TestRetrieveChunks_fieldRoundTrip(t *testing.T) {
 
 // drainAsk opens an Ask stream and concatenates all token chunks into a single
 // string. Errors from stream establishment or Recv are returned directly.
-func drainAsk(t *testing.T, client ragv1.RAGServiceClient, req *ragv1.AskRequest) (string, error) {
+func drainAsk(t *testing.T, ctx context.Context, client ragv1.RAGServiceClient, req *ragv1.AskRequest) (string, error) {
 	t.Helper()
-	stream, err := client.Ask(context.Background(), req)
+	stream, err := client.Ask(ctx, req)
 	if err != nil {
 		return "", err
 	}
@@ -202,10 +256,10 @@ func TestAsk(t *testing.T) {
 			wantAnswer: "I don't have context for that.",
 		},
 		{
-			name:      "retriever error propagates",
-			retriever: &fakeRetriever{err: errors.New("embed failed")},
+			name:       "retriever error propagates",
+			retriever:  &fakeRetriever{err: errors.New("embed failed")},
 			chatServer: &fakeChatServer{},
-			wantErr:   true,
+			wantErr:    true,
 		},
 		{
 			name: "chat error propagates",
@@ -222,7 +276,7 @@ func TestAsk(t *testing.T) {
 			srv := New(tt.retriever, tt.chatServer, 10, false)
 			client := dialBufconn(t, srv)
 
-			answer, err := drainAsk(t, client, &ragv1.AskRequest{Question: "what are pods?"})
+			answer, err := drainAsk(t, context.Background(), client, &ragv1.AskRequest{Question: "what are pods?"})
 			if tt.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")
@@ -236,5 +290,138 @@ func TestAsk(t *testing.T) {
 				t.Errorf("answer = %q, want %q", answer, tt.wantAnswer)
 			}
 		})
+	}
+}
+
+// TestContextErrors verifies that both Ask and RetrieveChunks correctly map context errors
+// (cancellation and deadline exceeded) to appropriate gRPC status codes.
+// The handlers use errors.Is on the operation error, which walks the chain to find
+// context.DeadlineExceeded or context.Canceled regardless of wrapping depth.
+func TestContextErrors(t *testing.T) {
+	tests := []struct {
+		name       string
+		isAsk      bool // true for Ask, false for RetrieveChunks
+		ctxFn      func() context.Context
+		wantCode   codes.Code
+		wantErrMsg string
+	}{
+		{
+			name:  "Ask context cancelled",
+			isAsk: true,
+			ctxFn: func() context.Context {
+				ctx, cancel := context.WithCancel(context.Background())
+				go func() {
+					time.Sleep(5 * time.Millisecond)
+					cancel()
+				}()
+				return ctx
+			},
+			wantCode: codes.Canceled,
+		},
+		{
+			name:  "Ask deadline exceeded",
+			isAsk: true,
+			ctxFn: func() context.Context {
+				ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+				_ = cancel // Will be cancelled by timeout
+				return ctx
+			},
+			wantCode: codes.DeadlineExceeded,
+		},
+		{
+			name:  "RetrieveChunks context cancelled",
+			isAsk: false,
+			ctxFn: func() context.Context {
+				ctx, cancel := context.WithCancel(context.Background())
+				go func() {
+					time.Sleep(5 * time.Millisecond)
+					cancel()
+				}()
+				return ctx
+			},
+			wantCode: codes.Canceled,
+		},
+		{
+			name:  "RetrieveChunks deadline exceeded",
+			isAsk: false,
+			ctxFn: func() context.Context {
+				ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+				_ = cancel // Will be cancelled by timeout
+				return ctx
+			},
+			wantCode: codes.DeadlineExceeded,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Set up slow operations to exceed deadline/cancellation
+			retriever := &slowFakeRetriever{
+				chunks: []vectorstore.Result{{Text: "ctx"}},
+				delay:  500 * time.Millisecond,
+			}
+			chatServer := &slowFakeChatServer{
+				response: "slow answer",
+				delay:    500 * time.Millisecond,
+			}
+			srv := New(retriever, chatServer, 10, false)
+			client := dialBufconn(t, srv)
+
+			ctx := tt.ctxFn()
+
+			if tt.isAsk {
+				// Ask RPC test
+				stream, err := client.Ask(ctx, &ragv1.AskRequest{Question: "test?"})
+				if err != nil {
+					// Stream establishment itself may fail with DeadlineExceeded — acceptable.
+					st, ok := status.FromError(err)
+					if !ok || st.Code() != tt.wantCode {
+						t.Errorf("stream creation error code = %v, want %v", st.Code(), tt.wantCode)
+					}
+					return
+				}
+				_, err = stream.Recv()
+				if err == nil {
+					t.Fatal("expected error due to context issue, got nil")
+				}
+				st, ok := status.FromError(err)
+				if !ok {
+					t.Fatalf("error is not a gRPC status: %v", err)
+				}
+				if st.Code() != tt.wantCode {
+					t.Errorf("got status code %v, want %v", st.Code(), tt.wantCode)
+				}
+			} else {
+				// RetrieveChunks RPC test
+				_, err := client.RetrieveChunks(ctx, &ragv1.RetrieveChunksRequest{Question: "test?", TopK: 1})
+				if err == nil {
+					t.Fatal("expected error due to context issue, got nil")
+				}
+				st, ok := status.FromError(err)
+				if !ok {
+					t.Fatalf("error is not a gRPC status: %v", err)
+				}
+				if st.Code() != tt.wantCode {
+					t.Errorf("got status code %v, want %v", st.Code(), tt.wantCode)
+				}
+			}
+		})
+	}
+}
+
+func TestHealthCheck(t *testing.T) {
+	srv := New(&fakeRetriever{chunks: nil}, &fakeChatServer{}, 10, false)
+	conn := dialBufconnConn(t, srv)
+
+	client := grpc_health_v1.NewHealthClient(conn)
+
+	for _, service := range []string{"", "rag.v1.RAGService"} {
+		resp, err := client.Check(context.Background(), &grpc_health_v1.HealthCheckRequest{Service: service})
+		if err != nil {
+			t.Fatalf("service=%q: %v", service, err)
+		}
+		if resp.Status != grpc_health_v1.HealthCheckResponse_SERVING {
+			t.Errorf("service=%q: got %v, want SERVING", service, resp.Status)
+		}
 	}
 }

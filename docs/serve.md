@@ -20,6 +20,16 @@ Start a gRPC server that exposes the RAG pipeline over two RPCs.
 
 ## RPCs
 
+For local testing, install the required tools:
+
+```bash
+# gRPC CLI (for Ask and RetrieveChunks RPCs)
+go install github.com/fullstorydev/grpcurl/cmd/grpcurl@latest
+
+# gRPC health check probe (for Health Check RPC)
+go install github.com/grpc-ecosystem/grpc-health-probe@latest
+```
+
 ### Ask (server-streaming)
 
 Retrieves the top-k chunks, injects them as context, and streams the LLM response token by token.
@@ -44,6 +54,20 @@ grpcurl -plaintext \
   -d '{"question": "What is a CRD?", "top_k": 3}' \
   localhost:50051 rag.v1.RAGService/RetrieveChunks
 ```
+
+## Health Check
+
+The server registers the standard gRPC health check service. Use `grpc_health_probe` to verify:
+
+```bash
+# overall server health
+grpc-health-probe -addr :50051
+
+# service-specific check
+grpc-health-probe -addr :50051 -service rag.v1.RAGService
+```
+
+Both return exit code `0` and print `status: SERVING` when the server is ready.
 
 ## Service definition
 
