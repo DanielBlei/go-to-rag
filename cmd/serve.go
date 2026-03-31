@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"net"
 
 	"github.com/spf13/cobra"
 
@@ -15,6 +16,10 @@ var (
 	serveTopK         int
 	serveModel        string
 	serveWithFallback bool
+
+	// grpcListener may be set by tests to pass a pre-bound listener to runServe,
+	// eliminating the listen-close-rebind race. Nil in normal operation.
+	grpcListener net.Listener
 )
 
 func init() {
@@ -53,5 +58,8 @@ func runServe(cmd *cobra.Command, _ []string) error {
 	// client satisfies both rag.Embedder (via ragPipeline) and grpcserver.ChatServer.
 	srv := grpcserver.New(ragPipeline, client, serveTopK, serveWithFallback)
 
+	if grpcListener != nil {
+		return srv.ServeListener(cmd.Context(), grpcListener)
+	}
 	return srv.Serve(cmd.Context(), grpcAddr)
 }
