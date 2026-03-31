@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"time"
 
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
@@ -28,6 +29,34 @@ type Server struct {
 	srv               *grpc.Server
 }
 
+func unaryLoggingInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+	start := time.Now()
+	resp, err := handler(ctx, req)
+	ev := log.Info()
+	if err != nil {
+		ev = log.Error().Err(err)
+	}
+	ev.Str("method", info.FullMethod).
+		Str("code", status.Code(err).String()).
+		Int64("duration_ms", time.Since(start).Milliseconds()).
+		Msg("rpc")
+	return resp, err
+}
+
+func streamLoggingInterceptor(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	start := time.Now()
+	err := handler(srv, ss)
+	ev := log.Info()
+	if err != nil {
+		ev = log.Error().Err(err)
+	}
+	ev.Str("method", info.FullMethod).
+		Str("code", status.Code(err).String()).
+		Int64("duration_ms", time.Since(start).Milliseconds()).
+		Msg("rpc")
+	return err
+}
+
 // New creates a gRPC server backed by the given Pipeline and ChatServer.
 // opts are forwarded to grpc.NewServer and can be used to configure TLS,
 // interceptors, and other server-level options.
@@ -38,7 +67,11 @@ func New(retriever rag.Pipeline, chatServer rag.ChatServer, topK int, serveWithF
 		topK:              topK,
 		serveWithFallback: serveWithFallback,
 	}
-	s.srv = grpc.NewServer(opts...)
+	serverOpts := append([]grpc.ServerOption{
+		grpc.ChainUnaryInterceptor(unaryLoggingInterceptor),
+		grpc.ChainStreamInterceptor(streamLoggingInterceptor),
+	}, opts...)
+	s.srv = grpc.NewServer(serverOpts...)
 	ragv1.RegisterRAGServiceServer(s.srv, s)
 	reflection.Register(s.srv)
 
@@ -80,7 +113,7 @@ func (s *Server) Ask(req *ragv1.AskRequest, stream ragv1.RAGService_AskServer) e
 		return err
 	}
 
-	log.Info().Str("question", question).Msg("Ask")
+	log.Debug().Str("question", question).Msg("ask")
 
 	topK := int(req.GetTopK())
 	if topK <= 0 {
@@ -108,7 +141,7 @@ func (s *Server) RetrieveChunks(ctx context.Context, req *ragv1.RetrieveChunksRe
 		return nil, err
 	}
 
-	log.Info().Str("question", question).Msg("RetrieveChunks")
+	log.Debug().Str("question", question).Msg("retrieve_chunks")
 
 	// option to overwrite the topK matches from server defaults
 	topK := int(req.GetTopK())
