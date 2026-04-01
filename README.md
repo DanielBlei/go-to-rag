@@ -1,15 +1,17 @@
 # go-to-rag
 
-![Go](https://img.shields.io/badge/Go-1.22+-00ADD8?style=flat&logo=go&logoColor=white)
+![Go](https://img.shields.io/badge/Go-1.25+-00ADD8?style=flat&logo=go&logoColor=white)
 ![Ollama](https://img.shields.io/badge/Ollama-local-black?style=flat&logo=ollama&logoColor=white)
 ![SQLite](https://img.shields.io/badge/SQLite-WAL-003B57?style=flat&logo=sqlite&logoColor=white)
 ![MCP](https://img.shields.io/badge/MCP-compatible-6B4FBB?style=flat&logo=anthropic&logoColor=white)
 ![gRPC](https://img.shields.io/badge/gRPC-50051-244c5a?style=flat&logo=grpc)
 ![License](https://img.shields.io/badge/License-Apache%202.0-blue?style=flat)
 
-A local RAG (Retrieval-Augmented Generation) engine written in Go, powered by [Ollama](https://ollama.com).
+A local RAG (Retrieval-Augmented Generation) engine written in Go, powered by [Ollama](https://ollama.com). 
 
-Run fully local with Ollama, or connect your knowledge base to Claude, GPT, or any MCP-compatible LLM via the built-in [MCP](https://modelcontextprotocol.io) server.
+Seed, embed, and query a knowledge base entirely on-device. 
+
+Access the pipeline through the CLI, connect it to Claude or any MCP-compatible LLM via the built-in [MCP](docs/mcp.md) server, or integrate service-to-service over [gRPC](docs/serve.md) with native token streaming.
 
 ## Requirements
 
@@ -88,18 +90,47 @@ make docker-demo DEMO_PROMPT="What is a CRD?"
 make docker-demo CONTAINER_TOOL=docker
 ```
 
-## Development
-
-```bash
-make help    # list all available targets
-make build   # build the binary
-make test    # run tests
-make proto   # regenerate Go stubs from proto/rag/v1/rag.proto
-```
-
 ## Project Roadmap
 
-- **Multi-agent Compose** -- domain-scoped RAG agents behind a router with concurrent fan-out queries
+Next up: **Multi-agent Compose** - domain-scoped RAG agents behind a
+router with concurrent fan-out queries.
+
+The gRPC layer provides the service-to-service backbone: each domain agent is a
+`go-to-rag` instance serving its own knowledge base over gRPC, and the router
+fans out queries to all agents in parallel, merging their streamed responses.
+
+
+
+Access the router through any entry point - CLI, MCP, or gRPC. 
+Under the hood, the router fans out to each domain agent over gRPC, querying their knowledge bases in parallel and merging the results.
+
+```mermaid
+graph TB
+    User["👤 User: CLI"]
+    LLM["🤖 AI Assistant: e.g Claude Code via MCP"]
+    Machine["⚙️ Service: gRPC"]
+
+    R["Router"]
+
+    A["go-to-rag<br/>Knowledge A<br/>:50051"]
+    B["go-to-rag<br/>Knowledge B<br/>:50052"]
+    C["go-to-rag<br/>Knowledge C<br/>:50053"]
+
+    User --> R
+    LLM --> R
+    Machine --> R
+    R <--> A
+    R <--> B
+    R <--> C
+
+    style User fill:#6B4FBB,color:#fff
+    style LLM fill:#6B4FBB,color:#fff
+    style Machine fill:#6B4FBB,color:#fff
+    style R fill:#2d6a4f,color:#fff
+    style A fill:#244c5a,color:#fff
+    style B fill:#244c5a,color:#fff
+    style C fill:#244c5a,color:#fff
+```
 
 ## Contributing
 
