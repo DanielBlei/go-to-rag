@@ -21,7 +21,7 @@ Access the pipeline through the CLI, connect it to Claude or any MCP-compatible 
 
 ```bash
 ollama pull llama3.2:1b
-ollama pull nomic-embed-text:latest
+ollama pull mxbai-embed-large:latest
 ```
 
 ## Quick start
@@ -58,7 +58,7 @@ See [docs/quickstart.md](docs/quickstart.md) for the full pipeline walkthrough a
 | Component | Choice | Rationale |
 |-----------|--------|-----------|
 | Language | Go | Fast, compiled, good fit for systems tooling |
-| Embeddings | `nomic-embed-text:latest` via Ollama | Local, no API keys, 768-dim vectors |
+| Embeddings | `mxbai-embed-large:latest` via Ollama | Local, no API keys, 1024-dim vectors |
 | Vector store | SQLite (WAL mode) | Zero-dependency MVP; swappable via `Store` interface |
 | Chat | Ollama (local) | Self-contained, fully local inference |
 | MCP SDK | [`modelcontextprotocol/go-sdk`](https://github.com/modelcontextprotocol/go-sdk) | Official Go MCP SDK for tool registration, stdio and SSE transport |
@@ -68,15 +68,9 @@ See [docs/quickstart.md](docs/quickstart.md) for the full pipeline walkthrough a
 
 ## Models
 
-Pre-tuned Modelfiles for the built-in K8s/OLM/OpenShift/Kubebuilder knowledge base are in [`modelfiles/`](modelfiles/README.md):
-
-| Model | Modelfile | Use case |
-|-------|-----------|----------|
-| `llama3.2:1b` | `llama3.2-1b.Modelfile` | Development, CPU-friendly, fast iteration |
-| `llama3.1:8b` | `llama3.1-8b.Modelfile` | Production-like evaluation, GPU recommended |
+The default chat model (`llama3.2:1b`) is intentionally small for fast iteration on development hardware. Additional pre-tuned Modelfiles are in [`modelfiles/`](modelfiles/README.md).
 
 To switch models, update the `MODELFILE` variable at the top of the `Makefile` to point to the desired Modelfile, then run `make model-create` to rebuild.
-See [`modelfiles/README.md`](modelfiles/README.md) for VRAM requirements and parameter details.
 
 ## Docker
 

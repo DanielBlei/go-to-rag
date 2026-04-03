@@ -22,6 +22,11 @@ import (
 	"github.com/DanielBlei/go-to-rag/internal/vectorstore"
 )
 
+const (
+	testEmbedModel = "mxbai-embed-large:latest"
+	testChatModel  = "llama3.2:1b"
+)
+
 func TestServe_RetrieveChunks(t *testing.T) {
 	// 1. Real SQLite db in temp dir, seeded with one chunk
 	dbFile := filepath.Join(t.TempDir(), "test.db")
@@ -39,15 +44,15 @@ func TestServe_RetrieveChunks(t *testing.T) {
 		switch r.URL.Path {
 		case "/api/tags":
 			models := []api.ListModelResponse{
-				{Model: "nomic-embed-text:latest"},
-				{Model: "llama3.2:1b"},
+				{Model: testEmbedModel},
+				{Model: testChatModel},
 			}
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(api.ListResponse{Models: models})
 		case "/api/embed":
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(api.EmbedResponse{
-				Model:      "nomic-embed-text:latest",
+				Model:      "x:latest",
 				Embeddings: [][]float32{{1, 0, 0, 0}},
 			})
 		default:
@@ -66,8 +71,8 @@ func TestServe_RetrieveChunks(t *testing.T) {
 
 	// 4. Set package-level vars used by runServe
 	host = ollamaServer.URL
-	embedModel = "nomic-embed-text:latest"
-	serveModel = "llama3.2:1b"
+	embedModel = testEmbedModel
+	serveModel = testChatModel
 	dbPath = dbFile
 	serveTopK = 5
 	serveWithFallback = false

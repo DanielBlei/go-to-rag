@@ -12,6 +12,11 @@ import (
 	"github.com/ollama/ollama/api"
 )
 
+const (
+	testEmbedModel = "mxbai-embed-large:latest"
+	testChatModel  = "llama3.2:1b"
+)
+
 func TestNew(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -23,28 +28,28 @@ func TestNew(t *testing.T) {
 		{
 			name:       "valid URL",
 			host:       "http://localhost:11434",
-			embedModel: "nomic-embed-text:latest",
-			chatModel:  "llama3.2:1b",
+			embedModel: testEmbedModel,
+			chatModel:  testChatModel,
 			wantErr:    false,
 		},
 		{
 			name:       "missing tag on embed model",
 			host:       "http://localhost:11434",
-			embedModel: "nomic-embed-text",
-			chatModel:  "llama3.2:1b",
+			embedModel: "mxbai-embed-large",
+			chatModel:  testChatModel,
 			wantErr:    true,
 		},
 		{
 			name:       "missing tag on chat model",
 			host:       "http://localhost:11434",
-			embedModel: "nomic-embed-text:latest",
+			embedModel: testEmbedModel,
 			chatModel:  "llama3.2",
 			wantErr:    true,
 		},
 		{
 			name:       "empty chat model (ingest use case)",
 			host:       "http://localhost:11434",
-			embedModel: "nomic-embed-text:latest",
+			embedModel: testEmbedModel,
 			chatModel:  "",
 			wantErr:    false,
 		},
@@ -72,17 +77,17 @@ func TestNew(t *testing.T) {
 
 func TestModelAvailable(t *testing.T) {
 	models := []api.ListModelResponse{
-		{Model: "llama3.2:1b"},
-		{Model: "nomic-embed-text:latest"},
+		{Model: testChatModel},
+		{Model: testEmbedModel},
 	}
 
 	tests := []struct {
 		want      string
 		available bool
 	}{
-		{"llama3.2:1b", true},
-		{"nomic-embed-text", true}, // should match ":latest" suffix
-		{"nomic-embed-text:latest", true},
+		{testChatModel, true},
+		{"mxbai-embed-large", true}, // should match ":latest" suffix
+		{testEmbedModel, true},
 		{"mistral", false},
 	}
 
@@ -153,7 +158,7 @@ func TestValidate(t *testing.T) {
 				host = srv.URL
 			}
 
-			c, err := New(host, "nomic-embed-text:latest", "llama3.2:1b")
+			c, err := New(host, testEmbedModel, testChatModel)
 			if err != nil {
 				t.Fatal(err)
 			}

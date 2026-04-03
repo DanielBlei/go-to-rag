@@ -15,7 +15,7 @@ Start a gRPC server that exposes the RAG pipeline over two RPCs.
 | `--model`         | `llama3.2:1b`             | Ollama chat model (used by `Ask`)                                        |
 | `--with-fallback` | `false`                   | Allow the model to answer from its own knowledge when context is missing |
 | `--host`          | `http://localhost:11434`  | Ollama host URL                                                          |
-| `--embed-model`   | `nomic-embed-text:latest` | Embedding model                                                          |
+| `--embed-model`   | `mxbai-embed-large:latest` | Embedding model                                                          |
 | `--db`            | `./data/index.db`         | Vector store database path                                               |
 
 ## RPCs

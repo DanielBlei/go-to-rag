@@ -12,7 +12,7 @@ Ask a single question and get a streamed, RAG-augmented response.
 |-------------------|---------------------------|-------------------------------------------------------------------------------------------|
 | `--host`          | `http://localhost:11434`  | Ollama host URL                                                                           |
 | `--model`         | `llama3.2:1b`             | Chat model                                                                                |
-| `--embed-model`   | `nomic-embed-text:latest` | Embedding model (used only when the store is present)                                     |
+| `--embed-model`   | `mxbai-embed-large:latest` | Embedding model (used only when the store is present)                                     |
 | `--db`            | `./data/index.db`         | Vector store database path                                                                |
 | `--top-k`         | `10`                      | Number of chunks/top matches to retrieve from the vector store                            |
 | `--with-fallback` | `false`                   | Let the model complement the answer with its own knowledge, with or without context found |
@@ -20,7 +20,7 @@ Ask a single question and get a streamed, RAG-augmented response.
 ## Workflow
 
 1. **Open store**: opens the SQLite vector store at `--db`. If missing or empty, logs a warning and continues in fallback mode. No error, no exit.
-2. **Embed query**: the prompt is embedded via `nomic-embed-text:latest` and the top `--top-k` chunks are retrieved by cosine similarity.
+2. **Embed query**: the prompt is embedded via `mxbai-embed-large:latest` and the top `--top-k` chunks are retrieved by cosine similarity.
 3. **Build message**: retrieved chunks are joined with `---` separators and injected as a context block.
 4. **Generate**: the assembled message is streamed to the chat model. Tokens are written to stdout as they arrive.
 

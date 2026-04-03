@@ -23,7 +23,7 @@ var (
 
 const (
 	defaultHost       = "http://localhost:11434"
-	defaultEmbedModel = "nomic-embed-text:latest"
+	defaultEmbedModel = "mxbai-embed-large:latest"
 	defaultChatModel  = "llama3.2:1b"
 	defaultDBPath     = "./data/index.db"
 )

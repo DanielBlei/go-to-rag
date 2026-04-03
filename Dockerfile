@@ -18,7 +18,7 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 ENV OLLAMA_HOST=http://localhost:11434
 ENV CHAT_MODEL=go-to-rag:latest
-ENV EMBED_MODEL=nomic-embed-text:latest
+ENV EMBED_MODEL=mxbai-embed-large:latest
 ENV DEMO_PROMPT="How does OLM manage the lifecycle of Operators on OpenShift?"
 
 ENTRYPOINT ["docker-entrypoint.sh"]

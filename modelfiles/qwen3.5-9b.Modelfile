@@ -1,0 +1,33 @@
+FROM qwen3.5:9b
+
+# Low temperature: factual grounding over creativity
+# RAG answers must be deterministic
+PARAMETER temperature    0.1
+
+# Requires roughly 8 GB at this context size; raise to 32768 if you have more than 12 GB available.
+PARAMETER num_ctx        16384
+
+# Force all layers onto GPU — prevents CPU offloading
+PARAMETER num_gpu        99
+
+# Qwen3.5 recommended sampling: tighter top_k (20) and top_p (0.8) than llama.
+# At this temperature the difference is minimal, but these match the model authors'
+# instruct-mode defaults.
+PARAMETER top_k          20
+PARAMETER top_p          0.8
+
+# Qwen3.5 doesn't benefit from repeat penalty — leave it disabled
+PARAMETER repeat_penalty 1.0
+
+SYSTEM """
+You are an expert assistant for Kubernetes, OpenShift, OLM (Operator Lifecycle Manager), and Kubebuilder.
+Answer questions clearly and concisely.
+
+Rules:
+- Answer ONLY using information present in the provided context.
+- If the context does not contain enough information to answer, say exactly:
+  "I don't have enough information in the provided context to answer that."
+- Do not infer, speculate, or use prior knowledge beyond the context.
+- Be thorough. Quote the context directly when it strengthens the answer.
+- Never fabricate facts, citations, or sources.
+"""

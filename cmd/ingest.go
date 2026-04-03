@@ -16,9 +16,9 @@ import (
 )
 
 var (
-	chunkSize    int
-	overlap      int
-	globPat      string
+	chunkSize     int
+	overlap       int
+	globPat       string
 	noRecursive   bool
 	includeHidden bool
 )
@@ -27,7 +27,7 @@ func init() {
 	rootCmd.AddCommand(ingestCmd)
 	addRAGFlags(ingestCmd)
 	ingestCmd.Flags().IntVar(&chunkSize, "chunk-size", 512, "chunk size in characters")
-	ingestCmd.Flags().IntVar(&overlap, "overlap", 50, "overlap between chunks in characters")
+	ingestCmd.Flags().IntVar(&overlap, "overlap", 100, "overlap between chunks in characters")
 	ingestCmd.Flags().StringVar(&globPat, "glob", "*.md", "glob pattern to match files")
 	ingestCmd.Flags().BoolVar(&noRecursive, "no-recursive", false, "only match files in the root directory, do not recurse")
 	ingestCmd.Flags().BoolVar(&includeHidden, "include-hidden", false, "include hidden files and directories (names starting with .)")

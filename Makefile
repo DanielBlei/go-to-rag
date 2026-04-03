@@ -97,7 +97,7 @@ docker-demo: docker-build model-delete model-create ## Run full seed -> ingest -
 	$(CONTAINER_TOOL) run --rm --network host \
 		-e OLLAMA_HOST=$(OLLAMA_HOST) \
 		-e CHAT_MODEL=$(MODEL_NAME) \
-		-e EMBED_MODEL=nomic-embed-text:latest \
+		-e EMBED_MODEL=mxbai-embed-large:latest \
 		-e DEMO_PROMPT="$(DEMO_PROMPT)" \
 		$(IMG)
 

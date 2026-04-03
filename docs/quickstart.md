@@ -6,7 +6,7 @@
 
 ```bash
 ollama pull llama3.2:1b
-ollama pull nomic-embed-text:latest
+ollama pull mxbai-embed-large:latest
 ```
 
 ## Commands
@@ -62,7 +62,7 @@ See [docs/seed.md](seed.md) for manifest format and default corpus details.
 ./bin/go-to-rag ingest [path]
 ```
 
-Chunks files, embeds each chunk via Ollama (`nomic-embed-text`), and stores the result in SQLite.
+Chunks files, embeds each chunk via Ollama (`mxbai-embed-large`), and stores the result in SQLite.
 Already-indexed files are skipped. Default path: `./seeds`.
 
 ```bash
