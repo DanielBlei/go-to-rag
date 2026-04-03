@@ -66,10 +66,10 @@ Chunks files, embeds each chunk via Ollama (`nomic-embed-text`), and stores the 
 Already-indexed files are skipped. Default path: `./seeds`.
 
 ```bash
-./bin/go-to-rag ingest                                          # ./seeds -> ./data/index.db
-./bin/go-to-rag ingest ./my-docs                                # custom source dir
-./bin/go-to-rag ingest --chunk-size 256 --overlap 32 ./my-docs
-./bin/go-to-rag ingest --glob "*.txt" --db ./custom.db ./my-docs
+./bin/go-to-rag ingest                                         # ./seeds -> ./data/index.db
+./bin/go-to-rag ingest ./vault                                 # recurse into any doc tree
+./bin/go-to-rag ingest --no-recursive ./docs                   # root directory only
+./bin/go-to-rag ingest --glob "*.txt" --db ./custom.db ./docs  # custom extension and db path
 ```
 
 See [docs/ingest.md](ingest.md) for chunking algorithm, storage schema, and scaling notes.

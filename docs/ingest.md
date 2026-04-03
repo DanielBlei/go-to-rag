@@ -14,12 +14,14 @@ Default path: `./seeds`
 |----------------|-------------------|-----------------------------------------|
 | `--chunk-size` | `512`             | Chunk size in characters (rune-based)   |
 | `--overlap`    | `50`              | Overlap between adjacent chunks         |
-| `--glob`       | `*.md`            | Glob pattern to match files in `[path]` |
-| `--db`         | `./data/index.db` | Vector store database path              |
+| `--glob`           | `*.md`            | Glob pattern matched against filename at any depth under `[path]` |
+| `--no-recursive`   | `false`           | Only match files in the root directory, do not recurse |
+| `--include-hidden` | `false`           | Include hidden files and directories (names starting with `.`) |
+| `--db`             | `./data/index.db` | Vector store database path              |
 
 ## Workflow
 
-For each matched file:
+`ingest` walks `[path]` recursively and matches each file's base name against `--glob`. Hidden files and directories (names starting with `.`) are skipped by default. Symlinked directories are never followed; a warning is logged if one is detected. Use `--no-recursive` to restrict to the root directory only, or `--include-hidden` to include hidden entries. For each matched file:
 
 1. **Skip check**: `HasSource` queries SQLite by absolute path. Already-indexed files are skipped entirely.
 2. **Chunk**: file is read into memory, converted to `[]rune`, then split with a sliding window: `step = chunkSize - overlap`, producing chunks at offsets `0, step, 2*step, ...`. Whitespace-only chunks are dropped.

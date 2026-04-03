@@ -4,8 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
+	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -15,9 +16,11 @@ import (
 )
 
 var (
-	chunkSize int
-	overlap   int
-	globPat   string
+	chunkSize    int
+	overlap      int
+	globPat      string
+	noRecursive   bool
+	includeHidden bool
 )
 
 func init() {
@@ -26,6 +29,8 @@ func init() {
 	ingestCmd.Flags().IntVar(&chunkSize, "chunk-size", 512, "chunk size in characters")
 	ingestCmd.Flags().IntVar(&overlap, "overlap", 50, "overlap between chunks in characters")
 	ingestCmd.Flags().StringVar(&globPat, "glob", "*.md", "glob pattern to match files")
+	ingestCmd.Flags().BoolVar(&noRecursive, "no-recursive", false, "only match files in the root directory, do not recurse")
+	ingestCmd.Flags().BoolVar(&includeHidden, "include-hidden", false, "include hidden files and directories (names starting with .)")
 }
 
 const defaultIngestPath = "./seeds"
@@ -61,20 +66,16 @@ func runIngest(cmd *cobra.Command, args []string) error {
 	}
 	defer func() { _ = store.Close() }()
 
-	if strings.Contains(globPat, "**") {
-		return fmt.Errorf("--glob does not support ** patterns")
-	}
-	pattern := filepath.Join(ingestPath, globPat)
-	matches, err := filepath.Glob(pattern)
+	matches, err := walkFiles(ingestPath, globPat, noRecursive, includeHidden)
 	if err != nil {
-		return fmt.Errorf("glob %q: %w", pattern, err)
+		return err
 	}
 	if len(matches) == 0 {
-		log.Warn().Str("pattern", pattern).Msg("no files matched")
+		log.Warn().Str("path", ingestPath).Str("glob", globPat).Msg("no files matched")
 		return nil
 	}
 
-	log.Info().Int("files", len(matches)).Str("pattern", pattern).Msg("starting ingest")
+	log.Info().Int("files", len(matches)).Str("path", ingestPath).Str("glob", globPat).Msg("starting ingest")
 
 	var totalChunks int
 	for _, path := range matches {
@@ -136,4 +137,53 @@ func runIngest(cmd *cobra.Command, args []string) error {
 	}
 	log.Info().Int("new_chunks", totalChunks).Int("total_chunks", count).Msg("ingest complete")
 	return nil
+}
+
+// walkFiles returns all files under root whose base name matches glob.
+// Hidden files and directories (names starting with '.') are skipped unless includeHidden is true.
+// Subdirectories are skipped when noRecursive is true.
+// Symlinked directories are never followed; a warning is logged if one is detected.
+func walkFiles(root, glob string, noRecursive, includeHidden bool) ([]string, error) {
+	if _, err := filepath.Match(glob, ""); err != nil {
+		return nil, fmt.Errorf("invalid glob pattern %q: %w", glob, err)
+	}
+	var matches []string
+	if err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		// WalkDir reports symlinks but does not follow them into directories.
+		// Detect symlinked dirs and warn — their contents are never walked.
+		if d.Type()&fs.ModeSymlink != 0 {
+			if fi, serr := os.Stat(path); serr == nil && fi.IsDir() {
+				log.Warn().Str("path", path).Msg("skipping symlinked directory")
+			}
+			return nil
+		}
+		base := filepath.Base(path)
+		isHidden := len(base) > 1 && base[0] == '.'
+		if d.IsDir() {
+			if path == root {
+				return nil
+			}
+			if !includeHidden && isHidden {
+				return fs.SkipDir
+			}
+			if noRecursive {
+				return fs.SkipDir
+			}
+			return nil
+		}
+		// file
+		if !includeHidden && isHidden {
+			return nil
+		}
+		if matched, _ := filepath.Match(glob, filepath.Base(path)); matched {
+			matches = append(matches, path)
+		}
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("walk %q: %w", root, err)
+	}
+	return matches, nil
 }
