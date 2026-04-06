@@ -18,6 +18,14 @@ docs:
     name: olm_operatorgroups.md
   - url: https://raw.githubusercontent.com/operator-framework/operator-lifecycle-manager/master/doc/design/dependency-resolution.md
     name: olm_dependency_resolution.md
+  - url: https://raw.githubusercontent.com/operator-framework/operator-lifecycle-manager/master/doc/design/building-your-csv.md
+    name: olm_building_csv.md
+  - url: https://raw.githubusercontent.com/operator-framework/operator-lifecycle-manager/master/doc/design/how-to-update-operators.md
+    name: olm_how_to_update_operators.md
+  - url: https://raw.githubusercontent.com/operator-framework/operator-lifecycle-manager/master/doc/design/subscription-config.md
+    name: olm_subscription_config.md
+  - url: https://raw.githubusercontent.com/operator-framework/operator-lifecycle-manager/master/doc/design/catalog-polling.md
+    name: olm_catalog_polling.md
 
   # OpenShift
   - url: https://raw.githubusercontent.com/openshift/enhancements/master/enhancements/ingress/custom-route-configuration.md

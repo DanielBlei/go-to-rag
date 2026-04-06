@@ -1,4 +1,4 @@
-FROM qwen3.5:4b
+FROM qwen3.5:2b
 
 # Low temperature: factual grounding over creativity
 # RAG answers must be deterministic

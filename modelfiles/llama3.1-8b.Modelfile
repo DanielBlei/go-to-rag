@@ -4,8 +4,10 @@ FROM llama3.1:8b
 # RAG answers must be deterministic
 PARAMETER temperature    0.1
 
-# Large context window
-PARAMETER num_ctx        32768
+# Context window: 8k fits RAG chunk retrieval (top-k × chunk size).
+# Increase for full-file or large document input
+# Setting higher values cost VRAM and first-token latency
+PARAMETER num_ctx        8192
 
 # Force all layers onto GPU — prevents CPU offloading
 PARAMETER num_gpu        99
@@ -23,6 +25,8 @@ Answer questions clearly and concisely.
 
 Rules:
 - Answer ONLY using information present in the provided context.
+- You may apply basic, universally accepted facts about the domain (e.g. OpenShift is a Kubernetes distribution)
+  to connect context to the question, but never introduce new facts or sources not in the context.
 - If the context does not contain enough information to answer, say exactly:
   "I don't have enough information in the provided context to answer that."
 - Do not infer, speculate, or use prior knowledge beyond the context.

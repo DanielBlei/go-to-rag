@@ -2,7 +2,7 @@ PROJECT     := go-to-rag
 BINARY      := $(PROJECT)
 MODELFILE   := modelfiles/llama3.2-1b.Modelfile
 MODEL_NAME  := $(PROJECT):latest
-DEMO_PROMPT ?= How does OLM manage the lifecycle of Operators on OpenShift?
+DEMO_PROMPT ?= How does OLM manage the lifecycle of Operators on OpenShift/Kubernetes clusters?
 
 WITH_FALLBACK  ?= false
 ifeq ($(WITH_FALLBACK),true)
