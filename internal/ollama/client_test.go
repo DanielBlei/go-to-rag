@@ -15,9 +15,9 @@ import (
 )
 
 const (
-	testEmbedModel  = "mxbai-embed-large:latest"
-	testChatModel   = "llama3.2:1b"
-	testThinkModel  = "qwen3:1.7b"
+	testEmbedModel = "mxbai-embed-large:latest"
+	testChatModel  = "llama3.2:1b"
+	testThinkModel = "qwen3:1.7b"
 )
 
 func TestNew(t *testing.T) {

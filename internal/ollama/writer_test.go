@@ -103,7 +103,5 @@ func TestTerminalWriter_ImplementsThinkingWriter(t *testing.T) {
 	tw = NewTerminalWriter(&buf)
 
 	// If this compiles, the interface is satisfied.
-	if tw == nil {
-		t.Fatal("TerminalWriter should satisfy ThinkingWriter interface")
-	}
+	_ = tw
 }
