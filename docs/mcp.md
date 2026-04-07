@@ -6,7 +6,7 @@ Start an MCP (Model Context Protocol) server that exposes the RAG pipeline as to
 ./bin/go-to-rag mcp
 ```
 
-By default the server starts in retrieval-only mode — no Ollama chat dependency required. Pass `--chat-model` to also enable the LLM chat tool.
+By default the server starts in retrieval-only mode — no Ollama chat dependency required. Pass `--model` to also enable the LLM chat tool.
 
 ## Flags
 
@@ -17,7 +17,7 @@ By default the server starts in retrieval-only mode — no Ollama chat dependenc
 | `--db`          | `./data/index.db`          | Vector store database path                                                                                                                                                                                                      |
 | `--top-k`       | `10`                       | Number of chunks to retrieve per query. Set at startup; not controllable per-request by the calling LLM.                                                                                                                        |
 | `--addr`        | *(unset)*                  | HTTP/SSE listen address (e.g. `:8080`); omit for stdio                                                                                                                                                                          |
-| `--chat-model`  | *(unset)*                  | Ollama chat model (e.g. `qwen3:1.7b`). When set, the `ask_to_rag_system` tool is registered. When absent, only `check_rag_knowledge_base` is available and no chat dependency is required.                                      |
+| `--model`  | *(unset)*                  | Ollama chat model (e.g. `qwen3:1.7b`). When set, the `ask_to_rag_system` tool is registered. When absent, only `check_rag_knowledge_base` is available and no chat dependency is required.                                      |
 | `--think`       | `hidden`                   | Default thinking mode for `ask_to_rag_system`: `hidden` (model reasons internally, tokens suppressed), `disabled` (no reasoning), `auto` (model default; surfaces reasoning tokens as a second content item when emitted).      |
 
 ## Modes
@@ -34,7 +34,7 @@ Both modes respect SIGINT/SIGTERM and shut down cleanly.
 
 Embeds the question, retrieves the top-k matching chunks from the vector store, and returns raw context separated by `---`. Use this when the calling LLM should reason over the retrieved context itself. Requires only the embed model — no chat model needed.
 
-### `ask_to_rag_system` *(registered only when `--chat-model` is set)*
+### `ask_to_rag_system` *(registered only when `--model` is set)*
 
 Retrieves context and generates a synthesised LLM answer in one shot. Accepts an optional `think` parameter per-call to override the server default:
 
@@ -56,7 +56,7 @@ make build
 claude mcp add go-to-rag -- ./bin/go-to-rag mcp
 
 # With chat enabled
-claude mcp add go-to-rag -- ./bin/go-to-rag mcp --chat-model qwen3:1.7b
+claude mcp add go-to-rag -- ./bin/go-to-rag mcp --model qwen3:1.7b
 
 claude mcp list
 ```

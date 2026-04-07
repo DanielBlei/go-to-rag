@@ -1,6 +1,6 @@
 PROJECT     := go-to-rag
 BINARY      := $(PROJECT)
-MODELFILE   := modelfiles/qwen3-1-7b.Modelfile
+MODELFILE   := modelfiles/qwen3-1.7b.Modelfile
 MODEL_NAME  := $(PROJECT):latest
 DEMO_PROMPT ?= How does OLM manage the lifecycle of Operators on OpenShift/Kubernetes clusters?
 

@@ -20,7 +20,7 @@ Access the pipeline through the CLI, connect it to Claude or any MCP-compatible 
 - Models pulled:
 
 ```bash
-ollama pull qwen3:1.7b           # default chat model
+ollama pull qwen3:1.7b                # default chat model
 ollama pull mxbai-embed-large:latest  # embedding model
 ```
 
@@ -70,7 +70,9 @@ See [docs/quickstart.md](docs/quickstart.md) for the full pipeline walkthrough a
 
 The default chat model (`qwen3:1.7b`) is balanced for speed and quality on development hardware. Additional pre-tuned Modelfiles are in [`modelfiles/`](modelfiles/README.md).
 
-To switch models, update the `MODELFILE` variable at the top of the `Makefile` to point to the desired Modelfile, then run `make model-create` to rebuild.
+`make model-create` rebuilds `go-to-rag:latest` from the `MODELFILE` set in the Makefile, used by `run-demo`. 
+
+For any CLI command, pass `--model` directly instead. See [Quickstart](#quickstart) and [`modelfiles/`](modelfiles/README.md).
 
 > **Note:** Out-of-the-box Ollama models aren't tuned for RAG. For best results, use one of the provided Modelfiles, which prioritise answering questions.
 

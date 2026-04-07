@@ -9,6 +9,30 @@ ollama pull qwen3:1.7b
 ollama pull mxbai-embed-large:latest
 ```
 
+## Modelfiles
+
+Out-of-the-box Ollama models lack the RAG-specific system prompt that constrains answers to retrieved context. The Modelfiles in [`modelfiles/`](../modelfiles/README.md) add that, it's recommended to use them for best results.
+
+**Create the custom model:**
+
+```bash
+# Default (qwen3:1.7b), change MODELFILE in the Makefile to recreate it
+make model-create
+
+# Or target a specific Modelfile directly
+ollama create go-to-rag:latest -f modelfiles/qwen3-0-6b.Modelfile
+```
+
+**Use it:**
+
+```bash
+./bin/go-to-rag ask --model go-to-rag:latest "How does OLM manage operator upgrades?"
+./bin/go-to-rag serve --model go-to-rag:latest
+./bin/go-to-rag mcp --model go-to-rag:latest
+```
+
+See [`modelfiles/README.md`](../modelfiles/README.md) for available models and parameter details.
+
 ## Commands
 
 ```bash
@@ -29,10 +53,10 @@ Retrieves the top `--top-k` chunks (default 10) from the vector store, injects t
 
 ```bash
 make build
-./bin/go-to-rag ask "What is a Kubernetes operator?"              # standard RAG query
-./bin/go-to-rag ask --model llama3.1:8b "Explain CRDs"           # use a larger model
-./bin/go-to-rag ask --with-fallback "What does OLM do?"          # retrieved context + model knowledge
-./bin/go-to-rag --debug ask "What does OLM do?"                  # log retrieved chunks and prompt
+./bin/go-to-rag ask --model go-to-rag:latest "What is a Kubernetes operator?"    # tuned RAG model
+./bin/go-to-rag ask --model llama3.1:8b "Explain CRDs"                           # raw Ollama model
+./bin/go-to-rag ask --model go-to-rag:latest --with-fallback "What does OLM do?" # hybrid mode
+./bin/go-to-rag --debug ask --model go-to-rag:latest "What does OLM do?"         # log chunks + prompt
 ```
 
 See [docs/ask.md](ask.md) for all flags and behaviour details.
@@ -84,7 +108,12 @@ Connect your knowledge base to Claude, GPT, or any MCP-compatible LLM. No local 
 
 ```bash
 make build
-claude mcp add go-to-rag -- ./bin/go-to-rag mcp    # register with the Claude CLI
+
+# Retrieval-only (no chat model required)
+claude mcp add go-to-rag -- ./bin/go-to-rag mcp
+
+# With chat enabled
+claude mcp add go-to-rag -- ./bin/go-to-rag mcp --model qwen3:1.7b
 ```
 
 Then in a Claude session:

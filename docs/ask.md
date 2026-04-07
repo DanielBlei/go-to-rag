@@ -61,20 +61,20 @@ When no context is found (empty store or missing `--db`), the fallback system pr
 Requires a populated store. See [quickstart](quickstart.md) to seed and ingest first.
 
 ```bash
-# Standard RAG query
-./bin/go-to-rag ask "What does OLM do?"
+# Standard RAG query using the tuned model (make model-create builds go-to-rag:latest)
+./bin/go-to-rag ask --model go-to-rag:latest "What does OLM do?"
 
 # Point at a custom database
-./bin/go-to-rag ask --db ./my-index.db "What is a Kubernetes operator?"
+./bin/go-to-rag ask --model go-to-rag:latest --db ./my-index.db "What is a Kubernetes operator?"
 
-# Use a larger chat model
+# Use a raw Ollama model (bypasses the RAG system prompt in the Modelfile)
 ./bin/go-to-rag ask --model llama3.1:8b "Explain CRDs in depth"
 
 # Hybrid, retrieved context injected, model may supplement with own knowledge
-./bin/go-to-rag ask --with-fallback "What does OLM do?"
+./bin/go-to-rag ask --model go-to-rag:latest --with-fallback "What does OLM do?"
 
 # Debug logs retrieved chunks and prompt assembly
-./bin/go-to-rag --debug ask "What is a Kubernetes operator?"
+./bin/go-to-rag --debug ask --model go-to-rag:latest "What is a Kubernetes operator?"
 ```
 
 Or via Make:
