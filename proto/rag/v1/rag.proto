@@ -4,6 +4,23 @@ package rag.v1;
 
 option go_package = "github.com/DanielBlei/go-to-rag/internal/gen/rag/v1;ragv1";
 
+// ThinkMode controls whether and how the model reasons before answering.
+enum ThinkMode {
+  // THINK_MODE_AUTO lets the model use its default behaviour.
+  // For qwen3, this means the model thinks and thinking tokens
+  // are streamed back in AskResponse.thinking fields.
+  THINK_MODE_AUTO = 0;
+
+  // THINK_MODE_DISABLED instructs the model to skip the reasoning step
+  // entirely. Use this to reduce latency when chain-of-thought is not needed.
+  THINK_MODE_DISABLED = 1;
+
+  // THINK_MODE_HIDDEN lets the model reason internally but discards all
+  // thinking tokens before they reach the response stream. The caller
+  // receives only the final answer tokens.
+  THINK_MODE_HIDDEN = 2;
+}
+
 // RAGService exposes the retrieval-augmented generation pipeline over gRPC.
 service RAGService {
   // Ask queries the knowledge base and streams an LLM-generated answer
@@ -16,15 +33,25 @@ service RAGService {
   // LLM generation. Designed for service-to-service use where the caller
   // handles generation.
   rpc RetrieveChunks(RetrieveChunksRequest) returns (RetrieveChunksResponse);
+
+  // GetServerConfig returns the server's current defaults so callers can
+  // understand what they get when optional fields are omitted.
+  rpc GetServerConfig(GetServerConfigRequest) returns (ServerConfig);
 }
 
 message AskRequest {
   string question = 1;
   int32 top_k = 2;
+  // think_mode overrides the server's default thinking behaviour for this
+  // request. When absent, the server default (see GetServerConfig) is used.
+  optional ThinkMode think_mode = 3;
 }
 
 message AskResponse {
-  string answer = 1;
+  oneof content {
+    string answer   = 1;
+    string thinking = 2;
+  }
 }
 
 message RetrieveChunksRequest {
@@ -41,4 +68,11 @@ message Chunk {
   string source = 2;
   double score = 3;
   int32 chunk_index = 4;
+}
+
+message GetServerConfigRequest {}
+
+message ServerConfig {
+  // default_think_mode is the ThinkMode applied when a request omits think_mode.
+  ThinkMode default_think_mode = 1;
 }

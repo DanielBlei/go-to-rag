@@ -8,14 +8,15 @@ Ask a single question and get a streamed, RAG-augmented response.
 
 ## Flags
 
-| Flag              | Default                   | Description                                                                               |
-|-------------------|---------------------------|-------------------------------------------------------------------------------------------|
-| `--host`          | `http://localhost:11434`  | Ollama host URL                                                                           |
-| `--model`         | `llama3.2:1b`             | Chat model                                                                                |
+| Flag              | Default                    | Description                                                                               |
+|-------------------|----------------------------|-------------------------------------------------------------------------------------------|
+| `--host`          | `http://localhost:11434`   | Ollama host URL                                                                           |
+| `--model`         | `llama3.2:1b`              | Chat model                                                                                |
 | `--embed-model`   | `mxbai-embed-large:latest` | Embedding model (used only when the store is present)                                     |
-| `--db`            | `./data/index.db`         | Vector store database path                                                                |
-| `--top-k`         | `10`                      | Number of chunks/top matches to retrieve from the vector store                            |
-| `--with-fallback` | `false`                   | Let the model complement the answer with its own knowledge, with or without context found |
+| `--db`            | `./data/index.db`          | Vector store database path                                                                |
+| `--top-k`         | `10`                       | Number of chunks/top matches to retrieve from the vector store                            |
+| `--with-fallback` | `false`                    | Let the model complement the answer with its own knowledge, with or without context found |
+| `--think`         | `auto`                     | Thinking token mode: `auto` (model default), `disabled` (no reasoning), `hidden` (reason silently) |
 
 ## Workflow
 
@@ -23,6 +24,29 @@ Ask a single question and get a streamed, RAG-augmented response.
 2. **Embed query**: the prompt is embedded via `mxbai-embed-large:latest` and the top `--top-k` chunks are retrieved by cosine similarity.
 3. **Build message**: retrieved chunks are joined with `---` separators and injected as a context block.
 4. **Generate**: the assembled message is streamed to the chat model. Tokens are written to stdout as they arrive.
+
+## `--think`
+
+Controls how the model's internal reasoning (supported by qwen3 family) is handled:
+
+| Value | Behaviour |
+|-------|-----------|
+| `auto` | Model default — qwen3 thinks by default; reasoning tokens are printed to stdout in dim gray before the answer |
+| `disabled` | Sends `Think=false` to Ollama; model never enters reasoning mode (faster, no `<think>` tokens) |
+| `hidden` | Model reasons internally but tokens are suppressed before output; only the final answer is shown |
+
+```bash
+# Show reasoning in gray (default)
+./bin/go-to-rag ask --model go-to-rag:latest "What does OLM do?"
+
+# Answer only, no visible reasoning
+./bin/go-to-rag ask --model go-to-rag:latest --think=hidden "What does OLM do?"
+
+# Disable reasoning entirely (fastest)
+./bin/go-to-rag ask --model go-to-rag:latest --think=disabled "What does OLM do?"
+```
+
+`--think` has no effect on models that do not support thinking (e.g. `llama3.2:1b`).
 
 ## `--with-fallback`
 

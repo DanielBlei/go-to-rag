@@ -17,6 +17,7 @@ var (
 	chatModel    string
 	withFallback bool
 	topK         int
+	thinkMode    string
 )
 
 func init() {
@@ -25,6 +26,7 @@ func init() {
 	askCmd.Flags().StringVar(&chatModel, "model", defaultChatModel, "Ollama chat model")
 	askCmd.Flags().BoolVar(&withFallback, "with-fallback", false, "allow the model to answer from its own knowledge when context is missing")
 	askCmd.Flags().IntVar(&topK, "top-k", 10, "number of chunks/top matches to retrieve from the vector store")
+	askCmd.Flags().StringVar(&thinkMode, "think", "auto", "control thinking tokens: auto (model default), disabled (no thinking), or hidden (model thinks but output suppressed)")
 }
 
 var askCmd = &cobra.Command{
@@ -39,7 +41,13 @@ func runAsk(cmd *cobra.Command, args []string) error {
 
 	log.Debug().Str("model", chatModel).Str("embed-model", embedModel).
 		Str("host", host).Str("db", dbPath).Int("top-k", topK).
-		Bool("with-fallback", withFallback).Msg("initializing ask")
+		Bool("with-fallback", withFallback).Str("think", thinkMode).Msg("initializing ask")
+
+	// Parse thinkMode string to ThinkMode enum.
+	thinkMode, err := rag.ParseThinkMode(thinkMode)
+	if err != nil {
+		return err
+	}
 
 	client, err := ollama.New(host, embedModel, chatModel)
 	if err != nil {
@@ -62,9 +70,10 @@ func runAsk(cmd *cobra.Command, args []string) error {
 	}
 
 	var chatErr error
+	chatOpts := rag.ChatOptions{ThinkMode: thinkMode}
 	if store != nil {
 		pipeline := rag.NewPipeline(client, store)
-		contextBlock, err := rag.Ask(cmd.Context(), pipeline, client, prompt, topK, withFallback, os.Stdout)
+		contextBlock, err := rag.Ask(cmd.Context(), pipeline, client, prompt, topK, withFallback, chatOpts, os.Stdout)
 		if err != nil {
 			chatErr = err
 		}
@@ -74,7 +83,7 @@ func runAsk(cmd *cobra.Command, args []string) error {
 		log.Debug().Str("prompt", prompt).Bool("rag", contextBlock != "").Msg("user input")
 	} else {
 		log.Debug().Str("prompt", prompt).Bool("rag", false).Msg("user input")
-		chatErr = client.Chat(cmd.Context(), rag.FallbackSystemPrompt, "", prompt, os.Stdout)
+		chatErr = client.Chat(cmd.Context(), rag.FallbackSystemPrompt, "", prompt, chatOpts, os.Stdout)
 	}
 
 	if chatErr != nil {

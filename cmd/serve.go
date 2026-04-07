@@ -55,8 +55,10 @@ func runServe(cmd *cobra.Command, _ []string) error {
 	}
 
 	ragPipeline := rag.NewPipeline(client, store)
-	// client satisfies both rag.Embedder (via ragPipeline) and grpcserver.ChatServer.
-	srv := grpcserver.New(ragPipeline, client, serveTopK, serveWithFallback)
+	// client satisfies both rag.Embedder (via ragPipeline) and rag.ChatServer.
+	// Server is stateless: clients dictate think_mode via gRPC requests.
+	// When clients omit think_mode, the server uses ThinkAuto (model default).
+	srv := grpcserver.New(ragPipeline, client, serveTopK, serveWithFallback, rag.ThinkAuto)
 
 	if grpcListener != nil {
 		return srv.ServeListener(cmd.Context(), grpcListener)

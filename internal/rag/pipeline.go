@@ -20,9 +20,23 @@ Rules:
   "Note: supplementing answer with my own knowledge."
 - Never fabricate facts or sources.`
 
+// ThinkMode controls whether and how the model reasons before answering.
+type ThinkMode int
+
+const (
+	ThinkAuto     ThinkMode = iota // model default
+	ThinkDisabled                  // model skips reasoning
+	ThinkHidden                    // model reasons; tokens not streamed to caller
+)
+
+// ChatOptions carries per-request options forwarded to ChatServer.Chat.
+type ChatOptions struct {
+	ThinkMode ThinkMode
+}
+
 // ChatServer generates LLM responses from context and a prompt.
 type ChatServer interface {
-	Chat(ctx context.Context, systemPrompt, contextBlock, userPrompt string, w io.Writer) error
+	Chat(ctx context.Context, systemPrompt, contextBlock, userPrompt string, opts ChatOptions, w io.Writer) error
 }
 
 // Embedder is the minimal interface Retrieve needs from the ollama client.
@@ -91,7 +105,7 @@ func Retrieve(ctx context.Context, query string, limit int, client Embedder, sto
 // Ask retrieves context via the pipeline, selects a system prompt, and streams
 // the LLM answer to w. Returns the retrieved context block so callers can
 // inspect it (e.g. to log empty results).
-func Ask(ctx context.Context, retriever Pipeline, chat ChatServer, question string, topK int, withFallback bool, w io.Writer) (string, error) {
+func Ask(ctx context.Context, retriever Pipeline, chat ChatServer, question string, topK int, withFallback bool, opts ChatOptions, w io.Writer) (string, error) {
 	contextBlock, err := retriever.Retrieve(ctx, question, topK)
 	if err != nil {
 		return "", fmt.Errorf("retrieve: %w", err)
@@ -102,8 +116,21 @@ func Ask(ctx context.Context, retriever Pipeline, chat ChatServer, question stri
 		sysPrompt = FallbackSystemPrompt
 	}
 
-	if err := chat.Chat(ctx, sysPrompt, contextBlock, question, w); err != nil {
+	if err := chat.Chat(ctx, sysPrompt, contextBlock, question, opts, w); err != nil {
 		return contextBlock, fmt.Errorf("chat: %w", err)
 	}
 	return contextBlock, nil
+}
+
+func ParseThinkMode(thinkMode string) (ThinkMode, error) {
+	switch thinkMode {
+	case "auto":
+		return ThinkAuto, nil
+	case "disabled":
+		return ThinkDisabled, nil
+	case "hidden":
+		return ThinkHidden, nil
+	default:
+		return 0, fmt.Errorf("invalid --think value %q, must be auto, disabled, or hidden", thinkMode)
+	}
 }

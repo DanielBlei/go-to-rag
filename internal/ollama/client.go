@@ -12,6 +12,8 @@ import (
 
 	"github.com/ollama/ollama/api"
 	"github.com/rs/zerolog/log"
+
+	"github.com/DanielBlei/go-to-rag/internal/rag"
 )
 
 const (
@@ -109,11 +111,35 @@ func (c *Client) Embed(ctx context.Context, text string) ([]float32, error) {
 // contextBlock is optional; when non-empty it is prepended to the user message.
 // If systemPrompt is non-empty it is prepended as a system message, overriding
 // any system prompt embedded in the Modelfile.
-func (c *Client) Chat(ctx context.Context, systemPrompt, contextBlock, userPrompt string, w io.Writer) error {
+func (c *Client) Chat(ctx context.Context, systemPrompt, contextBlock, userPrompt string, opts rag.ChatOptions, w io.Writer) error {
 	ctx, cancel := context.WithTimeout(ctx, chatTimeout)
 	defer cancel()
 	req := &api.ChatRequest{Model: c.chatModel, Messages: buildMessages(systemPrompt, contextBlock, userPrompt)}
+
+	// Set Think=false when thinking is disabled.
+	if opts.ThinkMode == rag.ThinkDisabled {
+		think := &api.ThinkValue{}
+		if err := think.UnmarshalJSON([]byte(`false`)); err != nil {
+			return fmt.Errorf("set think=false: %w", err)
+		}
+		req.Think = think
+	}
+
 	err := c.api.Chat(ctx, req, func(resp api.ChatResponse) error {
+		if resp.Message.Thinking != "" {
+			// Suppress thinking when hidden or disabled.
+			if opts.ThinkMode == rag.ThinkHidden || opts.ThinkMode == rag.ThinkDisabled {
+				return nil
+			}
+			// ThinkAuto: forward to writer.
+			if tw, ok := w.(ThinkingWriter); ok {
+				_, err := tw.WriteThinking([]byte(resp.Message.Thinking))
+				return err
+			}
+			// Fallback to ANSI output.
+			_, err := fmt.Fprintf(w, "\033[90m%s\033[0m", resp.Message.Thinking)
+			return err
+		}
 		_, err := fmt.Fprint(w, resp.Message.Content)
 		return err
 	})

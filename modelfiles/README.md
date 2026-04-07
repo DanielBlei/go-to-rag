@@ -8,11 +8,22 @@ Pre-tuned Ollama Modelfiles for the built-in K8s/OLM/OpenShift/Kubebuilder knowl
 |-------|------|----------|----------------------|
 | `llama3.2:1b` | `llama3.2-1b.Modelfile` | Development and fast iteration, CPU-friendly | >= 2 GB (CPU or GPU) |
 | `llama3.1:8b` | `llama3.1-8b.Modelfile` | Production-like evaluation, balanced quality | >= 6 GB GPU          |
+| `qwen3:1.7b` | `qwen3-1-7b.Modelfile` | Fast with thinking/reasoning tokens, development | >= 3 GB GPU          |
 | `qwen3.5:2b` | `qwen3.5-2b.Modelfile` | Fast, verbose answers with Qwen3.5 | >= 3 GB GPU          |
 | `qwen3.5:4b` | `qwen3.5-4b.Modelfile` | Concise, higher-quality answers with Qwen3.5 | >= 4 GB GPU          |
 | `qwen3:8b` | `qwen3-8b.Modelfile` | Production-grade with Qwen3, strongest reasoning | >= 7 GB GPU          |
 
-The llama3.1-8b and Qwen3.5 Modelfiles set `num_gpu 99` to pin all layers on the GPU. On a machine without a discrete GPU, remove that line and the model will fall back to CPU offloading (slower).
+The llama3.1-8b and Qwen3 Modelfiles set `num_gpu 99` to pin all layers on the GPU. On a machine without a discrete GPU, remove that line and the model will fall back to CPU offloading (slower).
+
+## Thinking Mode
+
+Qwen3 models (`qwen3:1.7b`, `qwen3:8b`) support thinking/reasoning tokens. The CLI and gRPC server expose this via the `--think` flag:
+
+- `--think=auto` (default): Model reasons (shows thinking tokens in gray on CLI, streams them on gRPC)
+- `--think=hidden`: Model reasons internally; output is suppressed (answer-only mode)
+- `--think=disabled`: Model skips reasoning entirely (fastest, no thinking tokens)
+
+Llama models do not support thinking and safely ignore the `--think` flag.
 
 ## Parameters
 
@@ -32,15 +43,18 @@ All models are configured at 8192 tokens context. This fits RAG chunk retrieval 
 
 ## Model Comparison
 
-The table below reflects observed behavior running `make run-demo` on a GPU-equipped machine. Results will vary by hardware, but the relative tradeoffs hold:
+The table below reflects observed behavior running `make run-demo` on a GPU-equipped machine with `--think=auto` (default). Results will vary by hardware, but the relative tradeoffs hold:
 
 | Model | Time | Style |
 |-------|------|-------|
 | `llama3.2:1b` | ~3s | Fast, minimal |
+| `qwen3:1.7b` | ~5s | Fast with reasoning |
 | `llama3.1:8b` | ~6s | Production-grade, balanced |
 | `qwen3:8b` | ~11s | Production-grade, technical |
 | `qwen3.5:2b` | ~15s | Fast, verbose |
 | `qwen3.5:4b` | ~35s | Slower, concise |
+
+**Thinking mode timing:** Using `--think=disabled` or `--think=hidden` can reduce latency since the model skips reasoning overhead. Qwen models with thinking typically add 2-4 seconds per response.
 
 > **Note:** Qwen3.5 latency may be affected by an issue with llama.cpp. Continuous testing in progress; results will be updated as improvements are observed.
 >

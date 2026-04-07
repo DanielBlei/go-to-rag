@@ -72,6 +72,8 @@ The default chat model (`llama3.2:1b`) is intentionally small for fast iteration
 
 To switch models, update the `MODELFILE` variable at the top of the `Makefile` to point to the desired Modelfile, then run `make model-create` to rebuild.
 
+> **Note:** Out-of-the-box Ollama models aren't tuned for RAG. For best results, use one of the provided Modelfiles, which prioritise answering questions.
+
 ## Docker
 
 Build and run the full pipeline in a container (requires Ollama on the host). Auto-detects podman (Default) or docker:

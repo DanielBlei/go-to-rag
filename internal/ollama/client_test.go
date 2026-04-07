@@ -1,6 +1,7 @@
 package ollama
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -10,11 +11,14 @@ import (
 	"time"
 
 	"github.com/ollama/ollama/api"
+
+	"github.com/DanielBlei/go-to-rag/internal/rag"
 )
 
 const (
-	testEmbedModel = "mxbai-embed-large:latest"
-	testChatModel  = "llama3.2:1b"
+	testEmbedModel  = "mxbai-embed-large:latest"
+	testChatModel   = "llama3.2:1b"
+	testThinkModel  = "qwen3:1.7b"
 )
 
 func TestNew(t *testing.T) {
@@ -172,6 +176,153 @@ func TestValidate(t *testing.T) {
 			}
 			if tt.errContains != "" && !strings.Contains(err.Error(), tt.errContains) {
 				t.Errorf("error should contain %q, got: %v", tt.errContains, err)
+			}
+		})
+	}
+}
+
+// mockThinkingWriter implements ThinkingWriter for testing.
+type mockThinkingWriter struct {
+	answer   strings.Builder
+	thinking strings.Builder
+}
+
+func (m *mockThinkingWriter) Write(p []byte) (int, error) {
+	return m.answer.Write(p)
+}
+
+func (m *mockThinkingWriter) WriteThinking(p []byte) (int, error) {
+	return m.thinking.Write(p)
+}
+
+// newTestChatServer creates an httptest server that mocks the Ollama /api/chat endpoint.
+// It emits thinking tokens only for models that support thinking (qwen3:*).
+func newTestChatServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/chat" {
+			http.NotFound(w, r)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/x-ndjson")
+		flusher := w.(http.Flusher)
+
+		// Determine if this model supports thinking by parsing the request.
+		var req api.ChatRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err == nil {
+			// Stream thinking token only if it's a thinking model.
+			if strings.Contains(req.Model, "qwen3") {
+				thinkResp := api.ChatResponse{Message: api.Message{Thinking: "<think>analyzing</think>"}}
+				_ = json.NewEncoder(w).Encode(thinkResp)
+				flusher.Flush()
+			}
+		}
+
+		// Stream answer token.
+		answerResp := api.ChatResponse{Message: api.Message{Content: "test answer"}}
+		_ = json.NewEncoder(w).Encode(answerResp)
+		flusher.Flush()
+
+		// Done sentinel.
+		doneResp := api.ChatResponse{Done: true}
+		_ = json.NewEncoder(w).Encode(doneResp)
+		flusher.Flush()
+	}))
+}
+
+func TestChat(t *testing.T) {
+	tests := []struct {
+		name               string
+		model              string
+		thinkMode          rag.ThinkMode
+		wantThinkingInGray bool // for direct io.Writer output
+		wantThinkingRouted bool // for ThinkingWriter
+	}{
+		{
+			name:               "ThinkAuto shows thinking in gray",
+			model:              testThinkModel,
+			thinkMode:          rag.ThinkAuto,
+			wantThinkingInGray: true,
+		},
+		{
+			name:               "ThinkHidden suppresses thinking output",
+			model:              testThinkModel,
+			thinkMode:          rag.ThinkHidden,
+			wantThinkingInGray: false,
+		},
+		{
+			name:               "ThinkDisabled suppresses thinking output",
+			model:              testThinkModel,
+			thinkMode:          rag.ThinkDisabled,
+			wantThinkingInGray: false,
+		},
+		{
+			name:               "non-thinking model with ThinkAuto works",
+			model:              testChatModel,
+			thinkMode:          rag.ThinkAuto,
+			wantThinkingInGray: false, // model doesn't emit thinking, so none in output
+		},
+		{
+			name:               "ThinkingWriter routes thinking separately",
+			model:              testThinkModel,
+			thinkMode:          rag.ThinkAuto,
+			wantThinkingRouted: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := newTestChatServer(t)
+			defer srv.Close()
+
+			c, err := New(srv.URL, testEmbedModel, tt.model)
+			if err != nil {
+				t.Fatalf("New: %v", err)
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+
+			chatOpts := rag.ChatOptions{ThinkMode: tt.thinkMode}
+
+			if tt.wantThinkingRouted {
+				// Test ThinkingWriter path.
+				mockWriter := &mockThinkingWriter{}
+				err := c.Chat(ctx, "system", "", "question", chatOpts, mockWriter)
+				if err != nil {
+					t.Fatalf("Chat with ThinkingWriter: %v", err)
+				}
+
+				// Verify thinking was routed to WriteThinking, answer to Write.
+				if mockWriter.thinking.Len() == 0 {
+					t.Error("expected thinking to be routed, got empty")
+				}
+				if mockWriter.answer.Len() == 0 {
+					t.Error("expected answer to be routed, got empty")
+				}
+			} else {
+				// Test direct writer (bytes.Buffer) path.
+				var buf bytes.Buffer
+				err := c.Chat(ctx, "system", "", "question", chatOpts, &buf)
+				if err != nil {
+					t.Fatalf("Chat: %v", err)
+				}
+
+				output := buf.String()
+				hasThinkingInGray := strings.Contains(output, "\033[90m")
+
+				if tt.wantThinkingInGray && !hasThinkingInGray {
+					t.Errorf("expected thinking in gray ANSI, got: %q", output)
+				}
+				if !tt.wantThinkingInGray && hasThinkingInGray {
+					t.Errorf("unexpected thinking in output, got: %q", output)
+				}
+
+				// All cases should have the answer.
+				if !strings.Contains(output, "test answer") {
+					t.Errorf("expected answer in output, got: %q", output)
+				}
 			}
 		})
 	}
