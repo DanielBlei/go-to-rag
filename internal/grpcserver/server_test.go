@@ -17,8 +17,14 @@ import (
 	"google.golang.org/grpc/test/bufconn"
 
 	ragv1 "github.com/DanielBlei/go-to-rag/internal/gen/rag/v1"
+	"github.com/DanielBlei/go-to-rag/internal/rag"
 	"github.com/DanielBlei/go-to-rag/internal/vectorstore"
 )
+
+// thinkingWriter mirrors ollama.ThinkingWriter for test-local type assertions.
+type thinkingWriter interface {
+	WriteThinking(p []byte) (int, error)
+}
 
 type fakeRetriever struct {
 	text   string
@@ -55,12 +61,19 @@ func (f *slowFakeRetriever) RetrieveChunks(ctx context.Context, _ string, _ int)
 
 type fakeChatServer struct {
 	response string
+	thinking string // if non-empty, routed via thinkingWriter if w implements it
 	err      error
 }
 
-func (f *fakeChatServer) Chat(_ context.Context, _, _, _ string, w io.Writer) error {
+func (f *fakeChatServer) Chat(_ context.Context, _, _, _ string, opts rag.ChatOptions, w io.Writer) error {
 	if f.err != nil {
 		return f.err
+	}
+	// Suppress thinking for ThinkHidden or ThinkDisabled modes, matching ollama.Client behavior.
+	if f.thinking != "" && opts.ThinkMode != rag.ThinkHidden && opts.ThinkMode != rag.ThinkDisabled {
+		if tw, ok := w.(thinkingWriter); ok {
+			_, _ = tw.WriteThinking([]byte(f.thinking))
+		}
 	}
 	_, _ = w.Write([]byte(f.response))
 	return nil
@@ -73,7 +86,7 @@ type slowFakeChatServer struct {
 	delay    time.Duration
 }
 
-func (f *slowFakeChatServer) Chat(ctx context.Context, _, _, _ string, w io.Writer) error {
+func (f *slowFakeChatServer) Chat(ctx context.Context, _, _, _ string, _ rag.ChatOptions, w io.Writer) error {
 	if f.err != nil {
 		return f.err
 	}
@@ -159,7 +172,7 @@ func TestRetrieveChunks(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			srv := New(tt.retriever, &fakeChatServer{}, 10, false)
+			srv := New(tt.retriever, &fakeChatServer{}, 10, false, rag.ThinkAuto)
 			client := dialBufconn(t, srv)
 
 			resp, err := client.RetrieveChunks(context.Background(), &ragv1.RetrieveChunksRequest{
@@ -186,7 +199,7 @@ func TestRetrieveChunks_fieldRoundTrip(t *testing.T) {
 	want := vectorstore.Result{
 		Source: "olm.md", Text: "operator lifecycle", ChunkIndex: 3, Score: 0.92,
 	}
-	srv := New(&fakeRetriever{chunks: []vectorstore.Result{want}}, &fakeChatServer{}, 10, false)
+	srv := New(&fakeRetriever{chunks: []vectorstore.Result{want}}, &fakeChatServer{}, 10, false, rag.ThinkAuto)
 	client := dialBufconn(t, srv)
 
 	resp, err := client.RetrieveChunks(context.Background(), &ragv1.RetrieveChunksRequest{
@@ -211,35 +224,38 @@ func TestRetrieveChunks_fieldRoundTrip(t *testing.T) {
 	}
 }
 
-// drainAsk opens an Ask stream and concatenates all token chunks into a single
-// string. Errors from stream establishment or Recv are returned directly.
-func drainAsk(t *testing.T, ctx context.Context, client ragv1.RAGServiceClient, req *ragv1.AskRequest) (string, error) {
+// drainAsk opens an Ask stream and collects all answer and thinking chunks into separate strings.
+// Errors from stream establishment or Recv are returned directly.
+func drainAsk(t *testing.T, ctx context.Context, client ragv1.RAGServiceClient, req *ragv1.AskRequest) (answer, thinking string, err error) {
 	t.Helper()
 	stream, err := client.Ask(ctx, req)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
-	var sb strings.Builder
+	var answerSb, thinkingSb strings.Builder
 	for {
 		msg, err := stream.Recv()
 		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {
-			return "", err
+			return "", "", err
 		}
-		sb.WriteString(msg.GetAnswer())
+		answerSb.WriteString(msg.GetAnswer())
+		thinkingSb.WriteString(msg.GetThinking())
 	}
-	return sb.String(), nil
+	return answerSb.String(), thinkingSb.String(), nil
 }
 
 func TestAsk(t *testing.T) {
 	tests := []struct {
-		name       string
-		retriever  *fakeRetriever
-		chatServer *fakeChatServer
-		wantAnswer string
-		wantErr    bool
+		name         string
+		retriever    *fakeRetriever
+		chatServer   *fakeChatServer
+		thinkMode    *ragv1.ThinkMode // nil = use server default
+		wantAnswer   string
+		wantThinking string
+		wantErr      bool
 	}{
 		{
 			name: "streams and assembles generated answer",
@@ -247,18 +263,21 @@ func TestAsk(t *testing.T) {
 				{Text: "pods are the smallest deployable unit"},
 			}},
 			chatServer: &fakeChatServer{response: "Pods are the smallest deployable unit in Kubernetes."},
+			thinkMode:  nil, // use server default
 			wantAnswer: "Pods are the smallest deployable unit in Kubernetes.",
 		},
 		{
 			name:       "empty context still generates answer",
 			retriever:  &fakeRetriever{chunks: nil},
 			chatServer: &fakeChatServer{response: "I don't have context for that."},
+			thinkMode:  nil,
 			wantAnswer: "I don't have context for that.",
 		},
 		{
 			name:       "retriever error propagates",
 			retriever:  &fakeRetriever{err: errors.New("embed failed")},
 			chatServer: &fakeChatServer{},
+			thinkMode:  nil,
 			wantErr:    true,
 		},
 		{
@@ -267,16 +286,45 @@ func TestAsk(t *testing.T) {
 				{Text: "some context"},
 			}},
 			chatServer: &fakeChatServer{err: errors.New("model unavailable")},
+			thinkMode:  nil,
 			wantErr:    true,
+		},
+		{
+			name:         "thinking forwarded with ThinkAuto",
+			retriever:    &fakeRetriever{chunks: nil},
+			chatServer:   &fakeChatServer{response: "answer", thinking: "let me think"},
+			thinkMode:    ptrThinkMode(ragv1.ThinkMode_THINK_MODE_AUTO),
+			wantAnswer:   "answer",
+			wantThinking: "let me think",
+		},
+		{
+			name:         "thinking suppressed with ThinkHidden",
+			retriever:    &fakeRetriever{chunks: nil},
+			chatServer:   &fakeChatServer{response: "answer", thinking: "let me think"},
+			thinkMode:    ptrThinkMode(ragv1.ThinkMode_THINK_MODE_HIDDEN),
+			wantAnswer:   "answer",
+			wantThinking: "",
+		},
+		{
+			name:       "no thinking field works fine",
+			retriever:  &fakeRetriever{chunks: nil},
+			chatServer: &fakeChatServer{response: "answer"},
+			thinkMode:  ptrThinkMode(ragv1.ThinkMode_THINK_MODE_AUTO),
+			wantAnswer: "answer",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			srv := New(tt.retriever, tt.chatServer, 10, false)
+			// Server default is ThinkAuto
+			srv := New(tt.retriever, tt.chatServer, 10, false, rag.ThinkAuto)
 			client := dialBufconn(t, srv)
 
-			answer, err := drainAsk(t, context.Background(), client, &ragv1.AskRequest{Question: "what are pods?"})
+			req := &ragv1.AskRequest{Question: "what are pods?"}
+			if tt.thinkMode != nil {
+				req.ThinkMode = tt.thinkMode
+			}
+			answer, thinking, err := drainAsk(t, context.Background(), client, req)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")
@@ -289,8 +337,16 @@ func TestAsk(t *testing.T) {
 			if answer != tt.wantAnswer {
 				t.Errorf("answer = %q, want %q", answer, tt.wantAnswer)
 			}
+			if thinking != tt.wantThinking {
+				t.Errorf("thinking = %q, want %q", thinking, tt.wantThinking)
+			}
 		})
 	}
+}
+
+// ptrThinkMode is a helper to create a pointer to a ThinkMode enum value.
+func ptrThinkMode(mode ragv1.ThinkMode) *ragv1.ThinkMode {
+	return &mode
 }
 
 // TestContextErrors verifies that both Ask and RetrieveChunks correctly map context errors
@@ -364,7 +420,7 @@ func TestContextErrors(t *testing.T) {
 				response: "slow answer",
 				delay:    500 * time.Millisecond,
 			}
-			srv := New(retriever, chatServer, 10, false)
+			srv := New(retriever, chatServer, 10, false, rag.ThinkAuto)
 			client := dialBufconn(t, srv)
 
 			ctx := tt.ctxFn()
@@ -409,8 +465,47 @@ func TestContextErrors(t *testing.T) {
 	}
 }
 
+func TestGetServerConfig(t *testing.T) {
+	tests := []struct {
+		name                 string
+		defaultThinkMode     rag.ThinkMode
+		wantDefaultThinkMode ragv1.ThinkMode
+	}{
+		{
+			name:                 "ThinkAuto default",
+			defaultThinkMode:     rag.ThinkAuto,
+			wantDefaultThinkMode: ragv1.ThinkMode_THINK_MODE_AUTO,
+		},
+		{
+			name:                 "ThinkDisabled default",
+			defaultThinkMode:     rag.ThinkDisabled,
+			wantDefaultThinkMode: ragv1.ThinkMode_THINK_MODE_DISABLED,
+		},
+		{
+			name:                 "ThinkHidden default",
+			defaultThinkMode:     rag.ThinkHidden,
+			wantDefaultThinkMode: ragv1.ThinkMode_THINK_MODE_HIDDEN,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := New(&fakeRetriever{}, &fakeChatServer{}, 10, false, tt.defaultThinkMode)
+			client := dialBufconn(t, srv)
+
+			resp, err := client.GetServerConfig(context.Background(), &ragv1.GetServerConfigRequest{})
+			if err != nil {
+				t.Fatalf("GetServerConfig: %v", err)
+			}
+			if resp.DefaultThinkMode != tt.wantDefaultThinkMode {
+				t.Errorf("DefaultThinkMode = %v, want %v", resp.DefaultThinkMode, tt.wantDefaultThinkMode)
+			}
+		})
+	}
+}
+
 func TestHealthCheck(t *testing.T) {
-	srv := New(&fakeRetriever{chunks: nil}, &fakeChatServer{}, 10, false)
+	srv := New(&fakeRetriever{chunks: nil}, &fakeChatServer{}, 10, false, rag.ThinkAuto)
 	conn := dialBufconnConn(t, srv)
 
 	client := grpc_health_v1.NewHealthClient(conn)

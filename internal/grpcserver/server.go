@@ -19,6 +19,18 @@ import (
 	"github.com/DanielBlei/go-to-rag/internal/rag"
 )
 
+// protoThinkMode maps from proto enum to rag.ThinkMode.
+func protoThinkMode(m ragv1.ThinkMode) rag.ThinkMode {
+	switch m {
+	case ragv1.ThinkMode_THINK_MODE_DISABLED:
+		return rag.ThinkDisabled
+	case ragv1.ThinkMode_THINK_MODE_HIDDEN:
+		return rag.ThinkHidden
+	default:
+		return rag.ThinkAuto
+	}
+}
+
 // Server wraps a rag.Pipeline and serves it over gRPC.
 type Server struct {
 	ragv1.UnimplementedRAGServiceServer
@@ -26,6 +38,7 @@ type Server struct {
 	chatServer        rag.ChatServer
 	topK              int
 	serveWithFallback bool
+	defaultThinkMode  rag.ThinkMode
 	srv               *grpc.Server
 }
 
@@ -60,12 +73,13 @@ func streamLoggingInterceptor(srv any, ss grpc.ServerStream, info *grpc.StreamSe
 // New creates a gRPC server backed by the given Pipeline and ChatServer.
 // opts are forwarded to grpc.NewServer and can be used to configure TLS,
 // interceptors, and other server-level options.
-func New(retriever rag.Pipeline, chatServer rag.ChatServer, topK int, serveWithFallback bool, opts ...grpc.ServerOption) *Server {
+func New(retriever rag.Pipeline, chatServer rag.ChatServer, topK int, serveWithFallback bool, defaultThinkMode rag.ThinkMode, opts ...grpc.ServerOption) *Server {
 	s := &Server{
 		retriever:         retriever,
 		chatServer:        chatServer,
 		topK:              topK,
 		serveWithFallback: serveWithFallback,
+		defaultThinkMode:  defaultThinkMode,
 	}
 	serverOpts := append([]grpc.ServerOption{
 		grpc.ChainUnaryInterceptor(unaryLoggingInterceptor),
@@ -99,7 +113,21 @@ type streamWriter struct {
 }
 
 func (sw *streamWriter) Write(p []byte) (int, error) {
-	if err := sw.stream.Send(&ragv1.AskResponse{Answer: string(p)}); err != nil {
+	err := sw.stream.Send(&ragv1.AskResponse{
+		Content: &ragv1.AskResponse_Answer{Answer: string(p)},
+	})
+	if err != nil {
+		return 0, err
+	}
+	return len(p), nil
+}
+
+// WriteThinking implements rag.ThinkingWriter.
+func (sw *streamWriter) WriteThinking(p []byte) (int, error) {
+	err := sw.stream.Send(&ragv1.AskResponse{
+		Content: &ragv1.AskResponse_Thinking{Thinking: string(p)},
+	})
+	if err != nil {
 		return 0, err
 	}
 	return len(p), nil
@@ -120,8 +148,15 @@ func (s *Server) Ask(req *ragv1.AskRequest, stream ragv1.RAGService_AskServer) e
 		topK = s.topK
 	}
 
+	// Resolve think_mode: use request value if set, else server default.
+	thinkMode := s.defaultThinkMode
+	if req.ThinkMode != nil {
+		thinkMode = protoThinkMode(req.GetThinkMode())
+	}
+	chatOpts := rag.ChatOptions{ThinkMode: thinkMode}
+
 	ctx := stream.Context()
-	_, askErr := rag.Ask(ctx, s.retriever, s.chatServer, question, topK, s.serveWithFallback, &streamWriter{stream})
+	_, askErr := rag.Ask(ctx, s.retriever, s.chatServer, question, topK, s.serveWithFallback, chatOpts, &streamWriter{stream: stream})
 	if askErr != nil {
 		if errors.Is(askErr, context.DeadlineExceeded) {
 			return status.Error(codes.DeadlineExceeded, "request timed out")
@@ -132,6 +167,13 @@ func (s *Server) Ask(req *ragv1.AskRequest, stream ragv1.RAGService_AskServer) e
 		return status.Errorf(codes.Internal, "ask: %v", askErr)
 	}
 	return nil
+}
+
+// GetServerConfig returns the server's current default configurations.
+func (s *Server) GetServerConfig(_ context.Context, _ *ragv1.GetServerConfigRequest) (*ragv1.ServerConfig, error) {
+	return &ragv1.ServerConfig{
+		DefaultThinkMode: ragv1.ThinkMode(s.defaultThinkMode),
+	}, nil
 }
 
 // RetrieveChunks returns scored chunks from the vector store.

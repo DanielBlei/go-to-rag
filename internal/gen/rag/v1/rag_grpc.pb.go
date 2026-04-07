@@ -19,8 +19,9 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	RAGService_Ask_FullMethodName            = "/rag.v1.RAGService/Ask"
-	RAGService_RetrieveChunks_FullMethodName = "/rag.v1.RAGService/RetrieveChunks"
+	RAGService_Ask_FullMethodName             = "/rag.v1.RAGService/Ask"
+	RAGService_RetrieveChunks_FullMethodName  = "/rag.v1.RAGService/RetrieveChunks"
+	RAGService_GetServerConfig_FullMethodName = "/rag.v1.RAGService/GetServerConfig"
 )
 
 // RAGServiceClient is the client API for RAGService service.
@@ -38,6 +39,9 @@ type RAGServiceClient interface {
 	// LLM generation. Designed for service-to-service use where the caller
 	// handles generation.
 	RetrieveChunks(ctx context.Context, in *RetrieveChunksRequest, opts ...grpc.CallOption) (*RetrieveChunksResponse, error)
+	// GetServerConfig returns the server's current defaults so callers can
+	// understand what they get when optional fields are omitted.
+	GetServerConfig(ctx context.Context, in *GetServerConfigRequest, opts ...grpc.CallOption) (*ServerConfig, error)
 }
 
 type rAGServiceClient struct {
@@ -64,13 +68,23 @@ func (c *rAGServiceClient) Ask(ctx context.Context, in *AskRequest, opts ...grpc
 	return x, nil
 }
 
-// RAGService_AskClient is the client streaming interface for Ask.
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type RAGService_AskClient = grpc.ServerStreamingClient[AskResponse]
 
 func (c *rAGServiceClient) RetrieveChunks(ctx context.Context, in *RetrieveChunksRequest, opts ...grpc.CallOption) (*RetrieveChunksResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RetrieveChunksResponse)
 	err := c.cc.Invoke(ctx, RAGService_RetrieveChunks_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *rAGServiceClient) GetServerConfig(ctx context.Context, in *GetServerConfigRequest, opts ...grpc.CallOption) (*ServerConfig, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ServerConfig)
+	err := c.cc.Invoke(ctx, RAGService_GetServerConfig_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -92,11 +106,11 @@ type RAGServiceServer interface {
 	// LLM generation. Designed for service-to-service use where the caller
 	// handles generation.
 	RetrieveChunks(context.Context, *RetrieveChunksRequest) (*RetrieveChunksResponse, error)
+	// GetServerConfig returns the server's current defaults so callers can
+	// understand what they get when optional fields are omitted.
+	GetServerConfig(context.Context, *GetServerConfigRequest) (*ServerConfig, error)
 	mustEmbedUnimplementedRAGServiceServer()
 }
-
-// RAGService_AskServer is the server streaming interface for Ask.
-type RAGService_AskServer = grpc.ServerStreamingServer[AskResponse]
 
 // UnimplementedRAGServiceServer must be embedded to have
 // forward compatible implementations.
@@ -110,6 +124,9 @@ func (UnimplementedRAGServiceServer) Ask(*AskRequest, grpc.ServerStreamingServer
 }
 func (UnimplementedRAGServiceServer) RetrieveChunks(context.Context, *RetrieveChunksRequest) (*RetrieveChunksResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RetrieveChunks not implemented")
+}
+func (UnimplementedRAGServiceServer) GetServerConfig(context.Context, *GetServerConfigRequest) (*ServerConfig, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetServerConfig not implemented")
 }
 func (UnimplementedRAGServiceServer) mustEmbedUnimplementedRAGServiceServer() {}
 func (UnimplementedRAGServiceServer) testEmbeddedByValue()                    {}
@@ -140,6 +157,9 @@ func _RAGService_Ask_Handler(srv interface{}, stream grpc.ServerStream) error {
 	return srv.(RAGServiceServer).Ask(m, &grpc.GenericServerStream[AskRequest, AskResponse]{ServerStream: stream})
 }
 
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type RAGService_AskServer = grpc.ServerStreamingServer[AskResponse]
+
 func _RAGService_RetrieveChunks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RetrieveChunksRequest)
 	if err := dec(in); err != nil {
@@ -158,6 +178,24 @@ func _RAGService_RetrieveChunks_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _RAGService_GetServerConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetServerConfigRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RAGServiceServer).GetServerConfig(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RAGService_GetServerConfig_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RAGServiceServer).GetServerConfig(ctx, req.(*GetServerConfigRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // RAGService_ServiceDesc is the grpc.ServiceDesc for RAGService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -168,6 +206,10 @@ var RAGService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RetrieveChunks",
 			Handler:    _RAGService_RetrieveChunks_Handler,
+		},
+		{
+			MethodName: "GetServerConfig",
+			Handler:    _RAGService_GetServerConfig_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
