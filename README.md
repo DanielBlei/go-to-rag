@@ -20,8 +20,8 @@ Access the pipeline through the CLI, connect it to Claude or any MCP-compatible 
 - Models pulled:
 
 ```bash
-ollama pull llama3.2:1b
-ollama pull mxbai-embed-large:latest
+ollama pull qwen3:1.7b           # default chat model
+ollama pull mxbai-embed-large:latest  # embedding model
 ```
 
 ## Quick start
@@ -68,7 +68,7 @@ See [docs/quickstart.md](docs/quickstart.md) for the full pipeline walkthrough a
 
 ## Models
 
-The default chat model (`llama3.2:1b`) is intentionally small for fast iteration on development hardware. Additional pre-tuned Modelfiles are in [`modelfiles/`](modelfiles/README.md).
+The default chat model (`qwen3:1.7b`) is balanced for speed and quality on development hardware. Additional pre-tuned Modelfiles are in [`modelfiles/`](modelfiles/README.md).
 
 To switch models, update the `MODELFILE` variable at the top of the `Makefile` to point to the desired Modelfile, then run `make model-create` to rebuild.
 

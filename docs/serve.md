@@ -12,7 +12,7 @@ Start a gRPC server that exposes the RAG pipeline over three RPCs: `Ask`, `Retri
 |--------------------|----------------------------|-----------------------------------------------------------------------------------------------------------------------------------|
 | `--grpc-addr`      | `:50051`                   | Listen address                                                                                                                    |
 | `--top-k`          | `10`                       | Default number of chunks to retrieve per request; individual requests may override via `top_k`                                    |
-| `--model`          | `llama3.2:1b`              | Ollama chat model (used by `Ask`)                                                                                                 |
+| `--model`          | `qwen3:1.7b`               | Ollama chat model (used by `Ask`)                                                                                                 |
 | `--with-fallback`  | `false`                    | Allow the model to answer from its own knowledge when context is missing                                                          |
 | `--host`           | `http://localhost:11434`   | Ollama host URL                                                                                                                   |
 | `--embed-model`    | `mxbai-embed-large:latest` | Embedding model                                                                                                                   |
