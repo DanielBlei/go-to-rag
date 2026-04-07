@@ -11,8 +11,10 @@ import (
 )
 
 var (
-	mcpAddr string
-	mcpTopK int
+	mcpAddr      string
+	mcpTopK      int
+	mcpChatModel string
+	mcpThinkMode = rag.ThinkHidden
 )
 
 func init() {
@@ -20,6 +22,8 @@ func init() {
 	addRAGFlags(mcpCmd)
 	mcpCmd.Flags().StringVar(&mcpAddr, "addr", "", `HTTP/SSE listen address (e.g. ":8080"); omit for STDIO`)
 	mcpCmd.Flags().IntVar(&mcpTopK, "top-k", 10, "number of chunks/top matches to retrieve from the vector store")
+	mcpCmd.Flags().StringVar(&mcpChatModel, "chat-model", "", "Ollama chat model; required to enable the ask_to_rag_system chat tool")
+	mcpCmd.Flags().Var(&thinkModeFlag{val: &mcpThinkMode}, "think", "default thinking mode: auto, disabled, or hidden")
 }
 
 var mcpCmd = &cobra.Command{
@@ -30,7 +34,7 @@ var mcpCmd = &cobra.Command{
 }
 
 func runMCP(cmd *cobra.Command, _ []string) error {
-	client, err := ollama.New(host, embedModel, "")
+	client, err := ollama.New(host, embedModel, mcpChatModel)
 	if err != nil {
 		return fmt.Errorf("ollama init: %w", err)
 	}
@@ -41,12 +45,17 @@ func runMCP(cmd *cobra.Command, _ []string) error {
 	}
 	defer func() { _ = store.Close() }()
 
-	if err := client.Validate(cmd.Context(), true, false); err != nil {
+	checkChat := mcpChatModel != ""
+	if err := client.Validate(cmd.Context(), true, checkChat); err != nil {
 		return fmt.Errorf("ollama validation: %w", err)
 	}
 
 	ragPipeline := rag.NewPipeline(client, store)
-	srv := mcpserver.New(ragPipeline, mcpTopK)
+	var chatServer rag.ChatServer
+	if mcpChatModel != "" {
+		chatServer = client
+	}
+	srv := mcpserver.New(ragPipeline, chatServer, mcpTopK, mcpThinkMode)
 
 	if mcpAddr != "" {
 		return srv.ServeSSE(cmd.Context(), mcpAddr)

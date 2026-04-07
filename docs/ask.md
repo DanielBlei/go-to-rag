@@ -11,7 +11,7 @@ Ask a single question and get a streamed, RAG-augmented response.
 | Flag              | Default                    | Description                                                                               |
 |-------------------|----------------------------|-------------------------------------------------------------------------------------------|
 | `--host`          | `http://localhost:11434`   | Ollama host URL                                                                           |
-| `--model`         | `llama3.2:1b`              | Chat model                                                                                |
+| `--model`         | `qwen3:1.7b`               | Chat model                                                                                |
 | `--embed-model`   | `mxbai-embed-large:latest` | Embedding model (used only when the store is present)                                     |
 | `--db`            | `./data/index.db`          | Vector store database path                                                                |
 | `--top-k`         | `10`                       | Number of chunks/top matches to retrieve from the vector store                            |
@@ -46,7 +46,7 @@ Controls how the model's internal reasoning (supported by qwen3 family) is handl
 ./bin/go-to-rag ask --model go-to-rag:latest --think=disabled "What does OLM do?"
 ```
 
-`--think` has no effect on models that do not support thinking (e.g. `llama3.2:1b`).
+`--think` is only effective with models that support reasoning tokens (e.g. qwen3). Other models ignore this flag.
 
 ## `--with-fallback`
 

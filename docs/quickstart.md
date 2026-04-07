@@ -5,7 +5,7 @@
 [Ollama](https://ollama.com) running locally, with the default models pulled:
 
 ```bash
-ollama pull llama3.2:1b
+ollama pull qwen3:1.7b
 ollama pull mxbai-embed-large:latest
 ```
 
