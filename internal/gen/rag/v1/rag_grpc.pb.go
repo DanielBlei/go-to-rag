@@ -41,7 +41,7 @@ type RAGServiceClient interface {
 	RetrieveChunks(ctx context.Context, in *RetrieveChunksRequest, opts ...grpc.CallOption) (*RetrieveChunksResponse, error)
 	// GetServerConfig returns the server's current defaults so callers can
 	// understand what they get when optional fields are omitted.
-	GetServerConfig(ctx context.Context, in *GetServerConfigRequest, opts ...grpc.CallOption) (*ServerConfig, error)
+	GetServerConfig(ctx context.Context, in *GetServerConfigRequest, opts ...grpc.CallOption) (*GetServerConfigResponse, error)
 }
 
 type rAGServiceClient struct {
@@ -81,9 +81,9 @@ func (c *rAGServiceClient) RetrieveChunks(ctx context.Context, in *RetrieveChunk
 	return out, nil
 }
 
-func (c *rAGServiceClient) GetServerConfig(ctx context.Context, in *GetServerConfigRequest, opts ...grpc.CallOption) (*ServerConfig, error) {
+func (c *rAGServiceClient) GetServerConfig(ctx context.Context, in *GetServerConfigRequest, opts ...grpc.CallOption) (*GetServerConfigResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ServerConfig)
+	out := new(GetServerConfigResponse)
 	err := c.cc.Invoke(ctx, RAGService_GetServerConfig_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -108,7 +108,7 @@ type RAGServiceServer interface {
 	RetrieveChunks(context.Context, *RetrieveChunksRequest) (*RetrieveChunksResponse, error)
 	// GetServerConfig returns the server's current defaults so callers can
 	// understand what they get when optional fields are omitted.
-	GetServerConfig(context.Context, *GetServerConfigRequest) (*ServerConfig, error)
+	GetServerConfig(context.Context, *GetServerConfigRequest) (*GetServerConfigResponse, error)
 	mustEmbedUnimplementedRAGServiceServer()
 }
 
@@ -125,7 +125,7 @@ func (UnimplementedRAGServiceServer) Ask(*AskRequest, grpc.ServerStreamingServer
 func (UnimplementedRAGServiceServer) RetrieveChunks(context.Context, *RetrieveChunksRequest) (*RetrieveChunksResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RetrieveChunks not implemented")
 }
-func (UnimplementedRAGServiceServer) GetServerConfig(context.Context, *GetServerConfigRequest) (*ServerConfig, error) {
+func (UnimplementedRAGServiceServer) GetServerConfig(context.Context, *GetServerConfigRequest) (*GetServerConfigResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetServerConfig not implemented")
 }
 func (UnimplementedRAGServiceServer) mustEmbedUnimplementedRAGServiceServer() {}

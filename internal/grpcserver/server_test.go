@@ -293,7 +293,7 @@ func TestAsk(t *testing.T) {
 			name:         "thinking forwarded with ThinkAuto",
 			retriever:    &fakeRetriever{chunks: nil},
 			chatServer:   &fakeChatServer{response: "answer", thinking: "let me think"},
-			thinkMode:    ptrThinkMode(ragv1.ThinkMode_THINK_MODE_AUTO),
+			thinkMode:    ptrThinkMode(ragv1.ThinkMode_THINK_MODE_UNSPECIFIED),
 			wantAnswer:   "answer",
 			wantThinking: "let me think",
 		},
@@ -309,7 +309,7 @@ func TestAsk(t *testing.T) {
 			name:       "no thinking field works fine",
 			retriever:  &fakeRetriever{chunks: nil},
 			chatServer: &fakeChatServer{response: "answer"},
-			thinkMode:  ptrThinkMode(ragv1.ThinkMode_THINK_MODE_AUTO),
+			thinkMode:  ptrThinkMode(ragv1.ThinkMode_THINK_MODE_UNSPECIFIED),
 			wantAnswer: "answer",
 		},
 	}
@@ -474,7 +474,7 @@ func TestGetServerConfig(t *testing.T) {
 		{
 			name:                 "ThinkAuto default",
 			defaultThinkMode:     rag.ThinkAuto,
-			wantDefaultThinkMode: ragv1.ThinkMode_THINK_MODE_AUTO,
+			wantDefaultThinkMode: ragv1.ThinkMode_THINK_MODE_UNSPECIFIED,
 		},
 		{
 			name:                 "ThinkDisabled default",

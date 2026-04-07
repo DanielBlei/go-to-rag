@@ -6,10 +6,10 @@ option go_package = "github.com/DanielBlei/go-to-rag/internal/gen/rag/v1;ragv1";
 
 // ThinkMode controls whether and how the model reasons before answering.
 enum ThinkMode {
-  // THINK_MODE_AUTO lets the model use its default behaviour.
+  // THINK_MODE_UNSPECIFIED uses the model's default behaviour (usually enabled).
   // For qwen3, this means the model thinks and thinking tokens
   // are streamed back in AskResponse.thinking fields.
-  THINK_MODE_AUTO = 0;
+  THINK_MODE_UNSPECIFIED = 0;
 
   // THINK_MODE_DISABLED instructs the model to skip the reasoning step
   // entirely. Use this to reduce latency when chain-of-thought is not needed.
@@ -36,7 +36,7 @@ service RAGService {
 
   // GetServerConfig returns the server's current defaults so callers can
   // understand what they get when optional fields are omitted.
-  rpc GetServerConfig(GetServerConfigRequest) returns (ServerConfig);
+  rpc GetServerConfig(GetServerConfigRequest) returns (GetServerConfigResponse);
 }
 
 message AskRequest {
@@ -48,10 +48,8 @@ message AskRequest {
 }
 
 message AskResponse {
-  oneof content {
-    string answer   = 1;
-    string thinking = 2;
-  }
+  string answer = 1;
+  string thinking = 2;
 }
 
 message RetrieveChunksRequest {
@@ -72,7 +70,7 @@ message Chunk {
 
 message GetServerConfigRequest {}
 
-message ServerConfig {
+message GetServerConfigResponse {
   // default_think_mode is the ThinkMode applied when a request omits think_mode.
   ThinkMode default_think_mode = 1;
 }

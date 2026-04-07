@@ -26,6 +26,8 @@ func protoThinkMode(m ragv1.ThinkMode) rag.ThinkMode {
 		return rag.ThinkDisabled
 	case ragv1.ThinkMode_THINK_MODE_HIDDEN:
 		return rag.ThinkHidden
+	case ragv1.ThinkMode_THINK_MODE_UNSPECIFIED:
+		fallthrough
 	default:
 		return rag.ThinkAuto
 	}
@@ -114,7 +116,7 @@ type streamWriter struct {
 
 func (sw *streamWriter) Write(p []byte) (int, error) {
 	err := sw.stream.Send(&ragv1.AskResponse{
-		Content: &ragv1.AskResponse_Answer{Answer: string(p)},
+		Answer: string(p),
 	})
 	if err != nil {
 		return 0, err
@@ -125,7 +127,7 @@ func (sw *streamWriter) Write(p []byte) (int, error) {
 // WriteThinking implements rag.ThinkingWriter.
 func (sw *streamWriter) WriteThinking(p []byte) (int, error) {
 	err := sw.stream.Send(&ragv1.AskResponse{
-		Content: &ragv1.AskResponse_Thinking{Thinking: string(p)},
+		Thinking: string(p),
 	})
 	if err != nil {
 		return 0, err
@@ -170,8 +172,8 @@ func (s *Server) Ask(req *ragv1.AskRequest, stream ragv1.RAGService_AskServer) e
 }
 
 // GetServerConfig returns the server's current default configurations.
-func (s *Server) GetServerConfig(_ context.Context, _ *ragv1.GetServerConfigRequest) (*ragv1.ServerConfig, error) {
-	return &ragv1.ServerConfig{
+func (s *Server) GetServerConfig(_ context.Context, _ *ragv1.GetServerConfigRequest) (*ragv1.GetServerConfigResponse, error) {
+	return &ragv1.GetServerConfigResponse{
 		DefaultThinkMode: ragv1.ThinkMode(s.defaultThinkMode),
 	}, nil
 }

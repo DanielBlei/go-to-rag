@@ -25,10 +25,10 @@ const (
 type ThinkMode int32
 
 const (
-	// THINK_MODE_AUTO lets the model use its default behaviour.
+	// THINK_MODE_UNSPECIFIED uses the model's default behaviour (usually enabled).
 	// For qwen3, this means the model thinks and thinking tokens
 	// are streamed back in AskResponse.thinking fields.
-	ThinkMode_THINK_MODE_AUTO ThinkMode = 0
+	ThinkMode_THINK_MODE_UNSPECIFIED ThinkMode = 0
 	// THINK_MODE_DISABLED instructs the model to skip the reasoning step
 	// entirely. Use this to reduce latency when chain-of-thought is not needed.
 	ThinkMode_THINK_MODE_DISABLED ThinkMode = 1
@@ -41,14 +41,14 @@ const (
 // Enum value maps for ThinkMode.
 var (
 	ThinkMode_name = map[int32]string{
-		0: "THINK_MODE_AUTO",
+		0: "THINK_MODE_UNSPECIFIED",
 		1: "THINK_MODE_DISABLED",
 		2: "THINK_MODE_HIDDEN",
 	}
 	ThinkMode_value = map[string]int32{
-		"THINK_MODE_AUTO":     0,
-		"THINK_MODE_DISABLED": 1,
-		"THINK_MODE_HIDDEN":   2,
+		"THINK_MODE_UNSPECIFIED": 0,
+		"THINK_MODE_DISABLED":    1,
+		"THINK_MODE_HIDDEN":      2,
 	}
 )
 
@@ -138,16 +138,13 @@ func (x *AskRequest) GetThinkMode() ThinkMode {
 	if x != nil && x.ThinkMode != nil {
 		return *x.ThinkMode
 	}
-	return ThinkMode_THINK_MODE_AUTO
+	return ThinkMode_THINK_MODE_UNSPECIFIED
 }
 
 type AskResponse struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// Types that are valid to be assigned to Content:
-	//
-	//	*AskResponse_Answer
-	//	*AskResponse_Thinking
-	Content       isAskResponse_Content `protobuf_oneof:"content"`
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Answer        string                 `protobuf:"bytes,1,opt,name=answer,proto3" json:"answer,omitempty"`
+	Thinking      string                 `protobuf:"bytes,2,opt,name=thinking,proto3" json:"thinking,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -182,46 +179,19 @@ func (*AskResponse) Descriptor() ([]byte, []int) {
 	return file_rag_v1_rag_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *AskResponse) GetContent() isAskResponse_Content {
-	if x != nil {
-		return x.Content
-	}
-	return nil
-}
-
 func (x *AskResponse) GetAnswer() string {
 	if x != nil {
-		if x, ok := x.Content.(*AskResponse_Answer); ok {
-			return x.Answer
-		}
+		return x.Answer
 	}
 	return ""
 }
 
 func (x *AskResponse) GetThinking() string {
 	if x != nil {
-		if x, ok := x.Content.(*AskResponse_Thinking); ok {
-			return x.Thinking
-		}
+		return x.Thinking
 	}
 	return ""
 }
-
-type isAskResponse_Content interface {
-	isAskResponse_Content()
-}
-
-type AskResponse_Answer struct {
-	Answer string `protobuf:"bytes,1,opt,name=answer,proto3,oneof"`
-}
-
-type AskResponse_Thinking struct {
-	Thinking string `protobuf:"bytes,2,opt,name=thinking,proto3,oneof"`
-}
-
-func (*AskResponse_Answer) isAskResponse_Content() {}
-
-func (*AskResponse_Thinking) isAskResponse_Content() {}
 
 type RetrieveChunksRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -423,7 +393,7 @@ func (*GetServerConfigRequest) Descriptor() ([]byte, []int) {
 	return file_rag_v1_rag_proto_rawDescGZIP(), []int{5}
 }
 
-type ServerConfig struct {
+type GetServerConfigResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// default_think_mode is the ThinkMode applied when a request omits think_mode.
 	DefaultThinkMode ThinkMode `protobuf:"varint,1,opt,name=default_think_mode,json=defaultThinkMode,proto3,enum=rag.v1.ThinkMode" json:"default_think_mode,omitempty"`
@@ -431,20 +401,20 @@ type ServerConfig struct {
 	sizeCache        protoimpl.SizeCache
 }
 
-func (x *ServerConfig) Reset() {
-	*x = ServerConfig{}
+func (x *GetServerConfigResponse) Reset() {
+	*x = GetServerConfigResponse{}
 	mi := &file_rag_v1_rag_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ServerConfig) String() string {
+func (x *GetServerConfigResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ServerConfig) ProtoMessage() {}
+func (*GetServerConfigResponse) ProtoMessage() {}
 
-func (x *ServerConfig) ProtoReflect() protoreflect.Message {
+func (x *GetServerConfigResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_rag_v1_rag_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -456,16 +426,16 @@ func (x *ServerConfig) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ServerConfig.ProtoReflect.Descriptor instead.
-func (*ServerConfig) Descriptor() ([]byte, []int) {
+// Deprecated: Use GetServerConfigResponse.ProtoReflect.Descriptor instead.
+func (*GetServerConfigResponse) Descriptor() ([]byte, []int) {
 	return file_rag_v1_rag_proto_rawDescGZIP(), []int{6}
 }
 
-func (x *ServerConfig) GetDefaultThinkMode() ThinkMode {
+func (x *GetServerConfigResponse) GetDefaultThinkMode() ThinkMode {
 	if x != nil {
 		return x.DefaultThinkMode
 	}
-	return ThinkMode_THINK_MODE_AUTO
+	return ThinkMode_THINK_MODE_UNSPECIFIED
 }
 
 var File_rag_v1_rag_proto protoreflect.FileDescriptor
@@ -479,11 +449,10 @@ const file_rag_v1_rag_proto_rawDesc = "" +
 	"\x05top_k\x18\x02 \x01(\x05R\x04topK\x125\n" +
 	"\n" +
 	"think_mode\x18\x03 \x01(\x0e2\x11.rag.v1.ThinkModeH\x00R\tthinkMode\x88\x01\x01B\r\n" +
-	"\v_think_mode\"P\n" +
-	"\vAskResponse\x12\x18\n" +
-	"\x06answer\x18\x01 \x01(\tH\x00R\x06answer\x12\x1c\n" +
-	"\bthinking\x18\x02 \x01(\tH\x00R\bthinkingB\t\n" +
-	"\acontent\"H\n" +
+	"\v_think_mode\"A\n" +
+	"\vAskResponse\x12\x16\n" +
+	"\x06answer\x18\x01 \x01(\tR\x06answer\x12\x1a\n" +
+	"\bthinking\x18\x02 \x01(\tR\bthinking\"H\n" +
 	"\x15RetrieveChunksRequest\x12\x1a\n" +
 	"\bquestion\x18\x01 \x01(\tR\bquestion\x12\x13\n" +
 	"\x05top_k\x18\x02 \x01(\x05R\x04topK\"?\n" +
@@ -495,18 +464,18 @@ const file_rag_v1_rag_proto_rawDesc = "" +
 	"\x05score\x18\x03 \x01(\x01R\x05score\x12\x1f\n" +
 	"\vchunk_index\x18\x04 \x01(\x05R\n" +
 	"chunkIndex\"\x18\n" +
-	"\x16GetServerConfigRequest\"O\n" +
-	"\fServerConfig\x12?\n" +
-	"\x12default_think_mode\x18\x01 \x01(\x0e2\x11.rag.v1.ThinkModeR\x10defaultThinkMode*P\n" +
-	"\tThinkMode\x12\x13\n" +
-	"\x0fTHINK_MODE_AUTO\x10\x00\x12\x17\n" +
+	"\x16GetServerConfigRequest\"Z\n" +
+	"\x17GetServerConfigResponse\x12?\n" +
+	"\x12default_think_mode\x18\x01 \x01(\x0e2\x11.rag.v1.ThinkModeR\x10defaultThinkMode*W\n" +
+	"\tThinkMode\x12\x1a\n" +
+	"\x16THINK_MODE_UNSPECIFIED\x10\x00\x12\x17\n" +
 	"\x13THINK_MODE_DISABLED\x10\x01\x12\x15\n" +
-	"\x11THINK_MODE_HIDDEN\x10\x022\xd8\x01\n" +
+	"\x11THINK_MODE_HIDDEN\x10\x022\xe3\x01\n" +
 	"\n" +
 	"RAGService\x120\n" +
 	"\x03Ask\x12\x12.rag.v1.AskRequest\x1a\x13.rag.v1.AskResponse0\x01\x12O\n" +
-	"\x0eRetrieveChunks\x12\x1d.rag.v1.RetrieveChunksRequest\x1a\x1e.rag.v1.RetrieveChunksResponse\x12G\n" +
-	"\x0fGetServerConfig\x12\x1e.rag.v1.GetServerConfigRequest\x1a\x14.rag.v1.ServerConfigB;Z9github.com/DanielBlei/go-to-rag/internal/gen/rag/v1;ragv1b\x06proto3"
+	"\x0eRetrieveChunks\x12\x1d.rag.v1.RetrieveChunksRequest\x1a\x1e.rag.v1.RetrieveChunksResponse\x12R\n" +
+	"\x0fGetServerConfig\x12\x1e.rag.v1.GetServerConfigRequest\x1a\x1f.rag.v1.GetServerConfigResponseB;Z9github.com/DanielBlei/go-to-rag/internal/gen/rag/v1;ragv1b\x06proto3"
 
 var (
 	file_rag_v1_rag_proto_rawDescOnce sync.Once
@@ -523,25 +492,25 @@ func file_rag_v1_rag_proto_rawDescGZIP() []byte {
 var file_rag_v1_rag_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_rag_v1_rag_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_rag_v1_rag_proto_goTypes = []any{
-	(ThinkMode)(0),                 // 0: rag.v1.ThinkMode
-	(*AskRequest)(nil),             // 1: rag.v1.AskRequest
-	(*AskResponse)(nil),            // 2: rag.v1.AskResponse
-	(*RetrieveChunksRequest)(nil),  // 3: rag.v1.RetrieveChunksRequest
-	(*RetrieveChunksResponse)(nil), // 4: rag.v1.RetrieveChunksResponse
-	(*Chunk)(nil),                  // 5: rag.v1.Chunk
-	(*GetServerConfigRequest)(nil), // 6: rag.v1.GetServerConfigRequest
-	(*ServerConfig)(nil),           // 7: rag.v1.ServerConfig
+	(ThinkMode)(0),                  // 0: rag.v1.ThinkMode
+	(*AskRequest)(nil),              // 1: rag.v1.AskRequest
+	(*AskResponse)(nil),             // 2: rag.v1.AskResponse
+	(*RetrieveChunksRequest)(nil),   // 3: rag.v1.RetrieveChunksRequest
+	(*RetrieveChunksResponse)(nil),  // 4: rag.v1.RetrieveChunksResponse
+	(*Chunk)(nil),                   // 5: rag.v1.Chunk
+	(*GetServerConfigRequest)(nil),  // 6: rag.v1.GetServerConfigRequest
+	(*GetServerConfigResponse)(nil), // 7: rag.v1.GetServerConfigResponse
 }
 var file_rag_v1_rag_proto_depIdxs = []int32{
 	0, // 0: rag.v1.AskRequest.think_mode:type_name -> rag.v1.ThinkMode
 	5, // 1: rag.v1.RetrieveChunksResponse.chunks:type_name -> rag.v1.Chunk
-	0, // 2: rag.v1.ServerConfig.default_think_mode:type_name -> rag.v1.ThinkMode
+	0, // 2: rag.v1.GetServerConfigResponse.default_think_mode:type_name -> rag.v1.ThinkMode
 	1, // 3: rag.v1.RAGService.Ask:input_type -> rag.v1.AskRequest
 	3, // 4: rag.v1.RAGService.RetrieveChunks:input_type -> rag.v1.RetrieveChunksRequest
 	6, // 5: rag.v1.RAGService.GetServerConfig:input_type -> rag.v1.GetServerConfigRequest
 	2, // 6: rag.v1.RAGService.Ask:output_type -> rag.v1.AskResponse
 	4, // 7: rag.v1.RAGService.RetrieveChunks:output_type -> rag.v1.RetrieveChunksResponse
-	7, // 8: rag.v1.RAGService.GetServerConfig:output_type -> rag.v1.ServerConfig
+	7, // 8: rag.v1.RAGService.GetServerConfig:output_type -> rag.v1.GetServerConfigResponse
 	6, // [6:9] is the sub-list for method output_type
 	3, // [3:6] is the sub-list for method input_type
 	3, // [3:3] is the sub-list for extension type_name
@@ -555,10 +524,6 @@ func file_rag_v1_rag_proto_init() {
 		return
 	}
 	file_rag_v1_rag_proto_msgTypes[0].OneofWrappers = []any{}
-	file_rag_v1_rag_proto_msgTypes[1].OneofWrappers = []any{
-		(*AskResponse_Answer)(nil),
-		(*AskResponse_Thinking)(nil),
-	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
