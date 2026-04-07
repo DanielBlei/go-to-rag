@@ -1,7 +1,6 @@
 package ollama
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -236,38 +235,31 @@ func TestChat(t *testing.T) {
 		name               string
 		model              string
 		thinkMode          rag.ThinkMode
-		wantThinkingInGray bool // for direct io.Writer output
 		wantThinkingRouted bool // for ThinkingWriter
 	}{
 		{
-			name:               "ThinkAuto shows thinking in gray",
+			name:               "ThinkAuto routes thinking to ThinkingWriter",
 			model:              testThinkModel,
 			thinkMode:          rag.ThinkAuto,
-			wantThinkingInGray: true,
+			wantThinkingRouted: true,
 		},
 		{
 			name:               "ThinkHidden suppresses thinking output",
 			model:              testThinkModel,
 			thinkMode:          rag.ThinkHidden,
-			wantThinkingInGray: false,
+			wantThinkingRouted: false,
 		},
 		{
 			name:               "ThinkDisabled suppresses thinking output",
 			model:              testThinkModel,
 			thinkMode:          rag.ThinkDisabled,
-			wantThinkingInGray: false,
+			wantThinkingRouted: false,
 		},
 		{
 			name:               "non-thinking model with ThinkAuto works",
 			model:              testChatModel,
 			thinkMode:          rag.ThinkAuto,
-			wantThinkingInGray: false, // model doesn't emit thinking, so none in output
-		},
-		{
-			name:               "ThinkingWriter routes thinking separately",
-			model:              testThinkModel,
-			thinkMode:          rag.ThinkAuto,
-			wantThinkingRouted: true,
+			wantThinkingRouted: false, // model doesn't emit thinking, so nothing to route
 		},
 	}
 
@@ -286,43 +278,32 @@ func TestChat(t *testing.T) {
 
 			chatOpts := rag.ChatOptions{ThinkMode: tt.thinkMode}
 
-			if tt.wantThinkingRouted {
-				// Test ThinkingWriter path.
-				mockWriter := &mockThinkingWriter{}
-				err := c.Chat(ctx, "system", "", "question", chatOpts, mockWriter)
-				if err != nil {
-					t.Fatalf("Chat with ThinkingWriter: %v", err)
-				}
+			// Test ThinkingWriter path.
+			mockWriter := &mockThinkingWriter{}
+			chatErr := c.Chat(ctx, "system", "", "question", chatOpts, mockWriter)
+			if chatErr != nil {
+				t.Fatalf("Chat with ThinkingWriter: %v", chatErr)
+			}
 
-				// Verify thinking was routed to WriteThinking, answer to Write.
+			// Verify routing based on the test case expectations.
+			if tt.wantThinkingRouted {
+				// Thinking should be routed to WriteThinking.
 				if mockWriter.thinking.Len() == 0 {
 					t.Error("expected thinking to be routed, got empty")
 				}
-				if mockWriter.answer.Len() == 0 {
-					t.Error("expected answer to be routed, got empty")
-				}
 			} else {
-				// Test direct writer (bytes.Buffer) path.
-				var buf bytes.Buffer
-				err := c.Chat(ctx, "system", "", "question", chatOpts, &buf)
-				if err != nil {
-					t.Fatalf("Chat: %v", err)
+				// Thinking should be suppressed, not routed.
+				if mockWriter.thinking.Len() != 0 {
+					t.Errorf("expected thinking to be suppressed, got: %q", mockWriter.thinking.String())
 				}
+			}
 
-				output := buf.String()
-				hasThinkingInGray := strings.Contains(output, "\033[90m")
-
-				if tt.wantThinkingInGray && !hasThinkingInGray {
-					t.Errorf("expected thinking in gray ANSI, got: %q", output)
-				}
-				if !tt.wantThinkingInGray && hasThinkingInGray {
-					t.Errorf("unexpected thinking in output, got: %q", output)
-				}
-
-				// All cases should have the answer.
-				if !strings.Contains(output, "test answer") {
-					t.Errorf("expected answer in output, got: %q", output)
-				}
+			// All cases should have the answer.
+			if mockWriter.answer.Len() == 0 {
+				t.Error("expected answer to be routed, got empty")
+			}
+			if !strings.Contains(mockWriter.answer.String(), "test answer") {
+				t.Errorf("expected answer in output, got: %q", mockWriter.answer.String())
 			}
 		})
 	}

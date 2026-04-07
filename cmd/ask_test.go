@@ -10,6 +10,8 @@ import (
 
 	"github.com/ollama/ollama/api"
 	"github.com/spf13/cobra"
+
+	"github.com/DanielBlei/go-to-rag/internal/rag"
 )
 
 func TestRunAsk_ThinkFlag(t *testing.T) {
@@ -42,28 +44,23 @@ func TestRunAsk_ThinkFlag(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		thinkFlag string
+		thinkMode rag.ThinkMode
 		wantErr   bool
 	}{
 		{
 			name:      "auto is valid",
-			thinkFlag: "auto",
+			thinkMode: rag.ThinkAuto,
 			wantErr:   false,
 		},
 		{
 			name:      "disabled is valid",
-			thinkFlag: "disabled",
+			thinkMode: rag.ThinkDisabled,
 			wantErr:   false,
 		},
 		{
 			name:      "hidden is valid",
-			thinkFlag: "hidden",
+			thinkMode: rag.ThinkHidden,
 			wantErr:   false,
-		},
-		{
-			name:      "invalid value errors",
-			thinkFlag: "banana",
-			wantErr:   true,
 		},
 	}
 
@@ -73,7 +70,7 @@ func TestRunAsk_ThinkFlag(t *testing.T) {
 			host = ollamaServer.URL
 			embedModel = testEmbedModel
 			chatModel = testChatModel
-			thinkMode = tt.thinkFlag
+			thinkMode = tt.thinkMode
 			dbPath = t.TempDir() + "/nonexistent.db" // Store doesn't exist; Chat path is taken
 			topK = 5
 			withFallback = false
@@ -94,4 +91,14 @@ func TestRunAsk_ThinkFlag(t *testing.T) {
 			}
 		})
 	}
+
+	// Test invalid value at flag-parse time.
+	t.Run("invalid value errors at flag parse", func(t *testing.T) {
+		var tm rag.ThinkMode
+		flag := &thinkModeFlag{val: &tm}
+		err := flag.Set("banana")
+		if err == nil {
+			t.Fatal("expected error for invalid value, got nil")
+		}
+	})
 }
