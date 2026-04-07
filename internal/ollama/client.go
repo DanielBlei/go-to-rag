@@ -136,9 +136,8 @@ func (c *Client) Chat(ctx context.Context, systemPrompt, contextBlock, userPromp
 				_, err := tw.WriteThinking([]byte(resp.Message.Thinking))
 				return err
 			}
-			// Fallback to ANSI output.
-			_, err := fmt.Fprintf(w, "\033[90m%s\033[0m", resp.Message.Thinking)
-			return err
+			// Plain io.Writer without ThinkingWriter: silently discard thinking.
+			return nil
 		}
 		_, err := fmt.Fprint(w, resp.Message.Content)
 		return err

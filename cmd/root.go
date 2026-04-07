@@ -24,7 +24,7 @@ var (
 const (
 	defaultHost       = "http://localhost:11434"
 	defaultEmbedModel = "mxbai-embed-large:latest"
-	defaultChatModel  = "llama3.2:1b"
+	defaultChatModel  = "qwen3:1.7b"
 	defaultDBPath     = "./data/index.db"
 )
 

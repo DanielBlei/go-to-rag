@@ -121,16 +121,3 @@ func Ask(ctx context.Context, retriever Pipeline, chat ChatServer, question stri
 	}
 	return contextBlock, nil
 }
-
-func ParseThinkMode(thinkMode string) (ThinkMode, error) {
-	switch thinkMode {
-	case "auto":
-		return ThinkAuto, nil
-	case "disabled":
-		return ThinkDisabled, nil
-	case "hidden":
-		return ThinkHidden, nil
-	default:
-		return 0, fmt.Errorf("invalid --think value %q, must be auto, disabled, or hidden", thinkMode)
-	}
-}

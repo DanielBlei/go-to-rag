@@ -17,8 +17,42 @@ var (
 	chatModel    string
 	withFallback bool
 	topK         int
-	thinkMode    string
+	thinkMode    rag.ThinkMode
 )
+
+// thinkModeFlag implements pflag.Value for the --think enum.
+type thinkModeFlag struct {
+	val *rag.ThinkMode
+}
+
+func (f *thinkModeFlag) String() string {
+	switch *f.val {
+	case rag.ThinkDisabled:
+		return "disabled"
+	case rag.ThinkHidden:
+		return "hidden"
+	default:
+		return "auto"
+	}
+}
+
+func (f *thinkModeFlag) Set(s string) error {
+	switch s {
+	case "auto":
+		*f.val = rag.ThinkAuto
+	case "disabled":
+		*f.val = rag.ThinkDisabled
+	case "hidden":
+		*f.val = rag.ThinkHidden
+	default:
+		return fmt.Errorf("invalid --think value %q, must be auto, disabled, or hidden", s)
+	}
+	return nil
+}
+
+func (f *thinkModeFlag) Type() string {
+	return "ThinkMode"
+}
 
 func init() {
 	rootCmd.AddCommand(askCmd)
@@ -26,7 +60,8 @@ func init() {
 	askCmd.Flags().StringVar(&chatModel, "model", defaultChatModel, "Ollama chat model")
 	askCmd.Flags().BoolVar(&withFallback, "with-fallback", false, "allow the model to answer from its own knowledge when context is missing")
 	askCmd.Flags().IntVar(&topK, "top-k", 10, "number of chunks/top matches to retrieve from the vector store")
-	askCmd.Flags().StringVar(&thinkMode, "think", "auto", "control thinking tokens: auto (model default), disabled (no thinking), or hidden (model thinks but output suppressed)")
+	askCmd.Flags().Var(&thinkModeFlag{val: &thinkMode}, "think",
+		"control thinking tokens: auto (model default), disabled (no thinking), or hidden (model thinks but output suppressed)")
 }
 
 var askCmd = &cobra.Command{
@@ -41,13 +76,7 @@ func runAsk(cmd *cobra.Command, args []string) error {
 
 	log.Debug().Str("model", chatModel).Str("embed-model", embedModel).
 		Str("host", host).Str("db", dbPath).Int("top-k", topK).
-		Bool("with-fallback", withFallback).Str("think", thinkMode).Msg("initializing ask")
-
-	// Parse thinkMode string to ThinkMode enum.
-	thinkMode, err := rag.ParseThinkMode(thinkMode)
-	if err != nil {
-		return err
-	}
+		Bool("with-fallback", withFallback).Int("think", int(thinkMode)).Msg("initializing ask")
 
 	client, err := ollama.New(host, embedModel, chatModel)
 	if err != nil {
@@ -71,9 +100,10 @@ func runAsk(cmd *cobra.Command, args []string) error {
 
 	var chatErr error
 	chatOpts := rag.ChatOptions{ThinkMode: thinkMode}
+	writer := ollama.NewTerminalWriter(os.Stdout)
 	if store != nil {
 		pipeline := rag.NewPipeline(client, store)
-		contextBlock, err := rag.Ask(cmd.Context(), pipeline, client, prompt, topK, withFallback, chatOpts, os.Stdout)
+		contextBlock, err := rag.Ask(cmd.Context(), pipeline, client, prompt, topK, withFallback, chatOpts, writer)
 		if err != nil {
 			chatErr = err
 		}
@@ -83,7 +113,7 @@ func runAsk(cmd *cobra.Command, args []string) error {
 		log.Debug().Str("prompt", prompt).Bool("rag", contextBlock != "").Msg("user input")
 	} else {
 		log.Debug().Str("prompt", prompt).Bool("rag", false).Msg("user input")
-		chatErr = client.Chat(cmd.Context(), rag.FallbackSystemPrompt, "", prompt, chatOpts, os.Stdout)
+		chatErr = client.Chat(cmd.Context(), rag.FallbackSystemPrompt, "", prompt, chatOpts, writer)
 	}
 
 	if chatErr != nil {
