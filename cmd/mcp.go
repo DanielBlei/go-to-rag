@@ -11,10 +11,11 @@ import (
 )
 
 var (
-	mcpAddr      string
-	mcpTopK      int
-	mcpChatModel string
-	mcpThinkMode = rag.ThinkHidden
+	mcpAddr          string
+	mcpTopK          int
+	mcpChatModel     string
+	mcpThinkMode     = rag.ThinkHidden
+	mcpConfThreshold float64
 )
 
 func init() {
@@ -28,6 +29,8 @@ func init() {
 		StringVar(&mcpChatModel, "model", "", "Ollama chat model; required to enable the ask_to_rag_system chat tool")
 	mcpCmd.Flags().
 		Var(&thinkModeFlag{val: &mcpThinkMode}, "think", "default thinking mode: auto, disabled, or hidden")
+	mcpCmd.Flags().
+		Float64Var(&mcpConfThreshold, "confidence-threshold", 0.5, "cosine similarity score below which retrieved chunks are flagged as low-confidence (0.0–1.0)")
 }
 
 var mcpCmd = &cobra.Command{
@@ -59,7 +62,7 @@ func runMCP(cmd *cobra.Command, _ []string) error {
 	if mcpChatModel != "" {
 		chatServer = client
 	}
-	srv := mcpserver.New(ragPipeline, chatServer, mcpTopK, mcpThinkMode)
+	srv := mcpserver.New(ragPipeline, chatServer, mcpTopK, mcpThinkMode, mcpConfThreshold)
 
 	if mcpAddr != "" {
 		return srv.ServeSSE(cmd.Context(), mcpAddr)

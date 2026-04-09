@@ -123,9 +123,12 @@ func Retrieve(
 	return strings.Join(texts, "\n---\n"), nil
 }
 
-// Ask retrieves context via the pipeline, selects a system prompt, and streams
-// the LLM answer to w. Returns the retrieved context block so callers can
-// inspect it (e.g. to log empty results).
+// Ask retrieves context via the pipeline, and streams the LLM answer to w.
+// The chat argument is automatically wrapped with newInjectionGuard,
+// which frames the context block with untrusted-data sentinels and
+// appends an injection-awareness notice to the system prompt.
+// Callers do not need to apply injection guarding themselves.
+// Returns the retrieved context block so callers can inspect it (e.g. to log empty results).
 func Ask(
 	ctx context.Context,
 	retriever Pipeline,
@@ -146,7 +149,9 @@ func Ask(
 		sysPrompt = FallbackSystemPrompt
 	}
 
-	if err := chat.Chat(ctx, sysPrompt, contextBlock, question, opts, w); err != nil {
+	if err := newInjectionGuard(
+		chat,
+	).Chat(ctx, sysPrompt, contextBlock, question, opts, w); err != nil {
 		return contextBlock, fmt.Errorf("chat: %w", err)
 	}
 	return contextBlock, nil

@@ -2,6 +2,7 @@ package mcpserver
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -16,7 +17,8 @@ import (
 
 // fakeRetriever implements rag.Pipeline for testing.
 type fakeRetriever struct {
-	context string
+	context string               // returned by Retrieve (ask_to_rag_system path)
+	chunks  []vectorstore.Result // returned by RetrieveChunks (check_rag_knowledge_base path)
 	err     error
 }
 
@@ -29,7 +31,7 @@ func (f *fakeRetriever) RetrieveChunks(
 	_ string,
 	_ int,
 ) ([]vectorstore.Result, error) {
-	return nil, f.err
+	return f.chunks, f.err
 }
 
 // fakeChatServer implements rag.ChatServer for testing.
@@ -81,21 +83,86 @@ func (s *Server) connectClient(t *testing.T) *mcp.ClientSession {
 }
 
 func TestCheckRAGKnowledgeBase(t *testing.T) {
+	// parseEnvelope deserialises the MCP text content into a ragEnvelope for
+	// structural assertion. It fails the test if the content is not valid JSON.
+	parseEnvelope := func(t *testing.T, content []mcp.Content) ragEnvelope {
+		t.Helper()
+		text := content[0].(*mcp.TextContent).Text
+		var env ragEnvelope
+		if err := json.Unmarshal([]byte(text), &env); err != nil {
+			t.Fatalf("response is not valid JSON: %v\ntext: %s", err, text)
+		}
+		return env
+	}
+
 	tests := []struct {
 		name      string
 		retriever *fakeRetriever
-		wantText  string
+		check     func(t *testing.T, env ragEnvelope)
 		wantErr   bool
 	}{
 		{
-			name:      "returns framed context",
-			retriever: &fakeRetriever{context: "chunk one\n---\nchunk two"},
-			wantText:  "Use the following knowledge base context",
+			name: "envelope always contains data notice",
+			retriever: &fakeRetriever{chunks: []vectorstore.Result{
+				{Text: "chunk one", Source: "doc.txt", Score: 0.9, ChunkIndex: 0},
+			}},
+			check: func(t *testing.T, env ragEnvelope) {
+				if env.DataNotice == "" {
+					t.Error("DataNotice is empty")
+				}
+				if len(env.Chunks) != 1 {
+					t.Fatalf("want 1 chunk, got %d", len(env.Chunks))
+				}
+				if env.Chunks[0].Text != "chunk one" {
+					t.Errorf("Chunks[0].Text = %q, want %q", env.Chunks[0].Text, "chunk one")
+				}
+				if env.Chunks[0].Source != "doc.txt" {
+					t.Errorf("Chunks[0].Source = %q, want %q", env.Chunks[0].Source, "doc.txt")
+				}
+			},
 		},
 		{
-			name:      "empty results returns no documents message",
-			retriever: &fakeRetriever{context: ""},
-			wantText:  "no relevant documents found",
+			name: "high confidence chunk does not set low_confidence",
+			retriever: &fakeRetriever{chunks: []vectorstore.Result{
+				{Text: "reliable chunk", Source: "doc.txt", Score: 0.9, ChunkIndex: 0},
+			}},
+			check: func(t *testing.T, env ragEnvelope) {
+				if len(env.Chunks) != 1 {
+					t.Fatalf("want 1 chunk, got %d", len(env.Chunks))
+				}
+				if env.Chunks[0].LowConfidence {
+					t.Error("LowConfidence = true for score 0.9, want false")
+				}
+			},
+		},
+		{
+			name: "low confidence chunk sets low_confidence flag",
+			retriever: &fakeRetriever{chunks: []vectorstore.Result{
+				{Text: "weak match", Source: "doc.txt", Score: 0.3, ChunkIndex: 0},
+			}},
+			check: func(t *testing.T, env ragEnvelope) {
+				if len(env.Chunks) != 1 {
+					t.Fatalf("want 1 chunk, got %d", len(env.Chunks))
+				}
+				if !env.Chunks[0].LowConfidence {
+					t.Error("LowConfidence = false for score 0.3, want true")
+				}
+			},
+		},
+		{
+			name:      "empty results returns envelope with empty chunks array",
+			retriever: &fakeRetriever{chunks: nil},
+			check: func(t *testing.T, env ragEnvelope) {
+				if env.DataNotice == "" {
+					t.Error("DataNotice is empty on empty-result envelope")
+				}
+				if env.Chunks == nil {
+					t.Error("Chunks is nil, want empty slice")
+				}
+				if len(env.Chunks) != 0 {
+					t.Errorf("want 0 chunks, got %d", len(env.Chunks))
+				}
+			},
 		},
 		{
 			name:      "retriever error returns tool error",
@@ -106,7 +173,7 @@ func TestCheckRAGKnowledgeBase(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cs := New(tt.retriever, nil, 5, rag.ThinkHidden).connectClient(t)
+			cs := New(tt.retriever, nil, 5, rag.ThinkHidden, 0.5).connectClient(t)
 			res, err := cs.CallTool(context.Background(), &mcp.CallToolParams{
 				Name:      "check_rag_knowledge_base",
 				Arguments: map[string]any{"question": "what are pods?"},
@@ -126,9 +193,9 @@ func TestCheckRAGKnowledgeBase(t *testing.T) {
 			if len(res.Content) == 0 {
 				t.Fatal("expected content, got none")
 			}
-			text := res.Content[0].(*mcp.TextContent).Text
-			if !strings.Contains(text, tt.wantText) {
-				t.Errorf("text %q does not contain %q", text, tt.wantText)
+			env := parseEnvelope(t, res.Content)
+			if tt.check != nil {
+				tt.check(t, env)
 			}
 		})
 	}
@@ -229,7 +296,7 @@ func TestAskToRAGSystem(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cs := New(tt.retriever, tt.chatServer, 5, rag.ThinkHidden).connectClient(t)
+			cs := New(tt.retriever, tt.chatServer, 5, rag.ThinkHidden, 0.5).connectClient(t)
 			res, err := cs.CallTool(context.Background(), &mcp.CallToolParams{
 				Name: "ask_to_rag_system",
 				Arguments: map[string]any{
