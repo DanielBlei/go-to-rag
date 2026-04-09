@@ -66,6 +66,17 @@ See [docs/quickstart.md](docs/quickstart.md) for the full pipeline walkthrough a
 | Protobuf | `buf` CLI | Schema definition, linting, and Go stub generation |
 | CLI | Cobra | Subcommand structure with per-command flags |
 
+## Safety
+
+Two layers of indirect prompt injection mitigation (OWASP LLM02):
+
+- **`InjectionGuard`** - `ChatServer` decorator applied automatically in `Ask()`. 
+Sanitises embedded sentinel strings, frames the context block with trust boundary markers, and appends an untrusted-data notice to the system prompt. Covers all entry points with no per-transport opt-in.
+- **MCP structured envelope** - `check_rag_knowledge_base` returns a JSON object with a `_data_notice` sentinel and per-chunk attribution and confidence scores rather than raw text.
+
+> **Note:**  Sentinel strings are fixed in source, this mitigates naïve injection, not targeted attacks. 
+A per-request nonce would be stronger and is a known future direction. Prompt guardrails (input/output validation pass) would follow the same `ChatServer` decorator pattern.
+
 ## Models
 
 The default chat model (`qwen3:1.7b`) is balanced for speed and quality on development hardware. Additional pre-tuned Modelfiles are in [`modelfiles/`](modelfiles/README.md).
@@ -96,7 +107,6 @@ router with concurrent fan-out queries.
 The gRPC layer provides the service-to-service backbone: each domain agent is a
 `go-to-rag` instance serving its own knowledge base over gRPC, and the router
 fans out queries to all agents in parallel, merging their streamed responses.
-
 
 
 Access the router through any entry point - CLI, MCP, or gRPC. 

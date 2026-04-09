@@ -18,6 +18,9 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -30,6 +33,7 @@ jobs:
         with:
           lint: true
           format: true
+          breaking: false
 
   build:
     name: Build
