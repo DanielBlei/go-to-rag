@@ -28,7 +28,8 @@ func init() {
 	serveCmd.Flags().StringVar(&grpcAddr, "grpc-addr", ":50051", "gRPC listen address")
 	serveCmd.Flags().IntVar(&serveTopK, "top-k", 10, "default number of chunks to retrieve")
 	serveCmd.Flags().StringVar(&serveModel, "model", defaultChatModel, "Ollama chat model")
-	serveCmd.Flags().BoolVar(&serveWithFallback, "with-fallback", false, "allow the model to answer from its own knowledge when context is missing")
+	serveCmd.Flags().
+		BoolVar(&serveWithFallback, "with-fallback", false, "allow the model to answer from its own knowledge when context is missing")
 }
 
 var serveCmd = &cobra.Command{

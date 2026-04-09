@@ -34,31 +34,39 @@ func TestServe_RetrieveChunks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewSQLite: %v", err)
 	}
-	if err := store.AddChunk(context.Background(), "doc.md", "pods are the smallest unit", []float32{1, 0, 0, 0}, 0); err != nil {
+	if err := store.AddChunk(
+		context.Background(),
+		"doc.md",
+		"pods are the smallest unit",
+		[]float32{1, 0, 0, 0},
+		0,
+	); err != nil {
 		t.Fatalf("AddChunk: %v", err)
 	}
 	_ = store.Close()
 
 	// 2. Fake Ollama server — handles /api/tags and /api/embed
-	ollamaServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/api/tags":
-			models := []api.ListModelResponse{
-				{Model: testEmbedModel},
-				{Model: testChatModel},
+	ollamaServer := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/api/tags":
+				models := []api.ListModelResponse{
+					{Model: testEmbedModel},
+					{Model: testChatModel},
+				}
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(api.ListResponse{Models: models})
+			case "/api/embed":
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(api.EmbedResponse{
+					Model:      "x:latest",
+					Embeddings: [][]float32{{1, 0, 0, 0}},
+				})
+			default:
+				http.NotFound(w, r)
 			}
-			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(api.ListResponse{Models: models})
-		case "/api/embed":
-			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(api.EmbedResponse{
-				Model:      "x:latest",
-				Embeddings: [][]float32{{1, 0, 0, 0}},
-			})
-		default:
-			http.NotFound(w, r)
-		}
-	}))
+		}),
+	)
 	defer ollamaServer.Close()
 
 	// 3. Pre-bind listener, held open until runServe calls ServeListener,
@@ -130,7 +138,10 @@ func waitForServer(t *testing.T, addr string, timeout time.Duration) (*grpc.Clie
 		if err == nil {
 			// Probe with a real call; server may be listening but not yet serving
 			cl := ragv1.NewRAGServiceClient(conn)
-			_, callErr := cl.RetrieveChunks(context.Background(), &ragv1.RetrieveChunksRequest{Question: "probe", TopK: 1})
+			_, callErr := cl.RetrieveChunks(
+				context.Background(),
+				&ragv1.RetrieveChunksRequest{Question: "probe", TopK: 1},
+			)
 			if callErr == nil || status.Code(callErr) != codes.Unavailable {
 				return conn, nil
 			}

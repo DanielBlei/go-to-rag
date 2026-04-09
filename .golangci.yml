@@ -12,10 +12,17 @@ formatters:
   enable:
     - gofmt
     - goimports
+    - golines
   settings:
     goimports:
       local-prefixes:
         - github.com/DanielBlei/go-to-rag
+
+linters-settings:
+  lll:
+    line-length: 120
+  golines:
+    max-len: 120
 
 issues:
   max-same-issues: 0

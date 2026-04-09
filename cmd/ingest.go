@@ -29,8 +29,10 @@ func init() {
 	ingestCmd.Flags().IntVar(&chunkSize, "chunk-size", 512, "chunk size in characters")
 	ingestCmd.Flags().IntVar(&overlap, "overlap", 100, "overlap between chunks in characters")
 	ingestCmd.Flags().StringVar(&globPat, "glob", "*.md", "glob pattern to match files")
-	ingestCmd.Flags().BoolVar(&noRecursive, "no-recursive", false, "only match files in the root directory, do not recurse")
-	ingestCmd.Flags().BoolVar(&includeHidden, "include-hidden", false, "include hidden files and directories (names starting with .)")
+	ingestCmd.Flags().
+		BoolVar(&noRecursive, "no-recursive", false, "only match files in the root directory, do not recurse")
+	ingestCmd.Flags().
+		BoolVar(&includeHidden, "include-hidden", false, "include hidden files and directories (names starting with .)")
 }
 
 const defaultIngestPath = "./seeds"
@@ -75,7 +77,11 @@ func runIngest(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	log.Info().Int("files", len(matches)).Str("path", ingestPath).Str("glob", globPat).Msg("starting ingest")
+	log.Info().
+		Int("files", len(matches)).
+		Str("path", ingestPath).
+		Str("glob", globPat).
+		Msg("starting ingest")
 
 	var totalChunks int
 	for _, path := range matches {

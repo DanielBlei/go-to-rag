@@ -212,7 +212,9 @@ func newTestChatServer(t *testing.T) *httptest.Server {
 		if err := json.NewDecoder(r.Body).Decode(&req); err == nil {
 			// Stream thinking token only if it's a thinking model.
 			if strings.Contains(req.Model, "qwen3") {
-				thinkResp := api.ChatResponse{Message: api.Message{Thinking: "<think>analyzing</think>"}}
+				thinkResp := api.ChatResponse{
+					Message: api.Message{Thinking: "<think>analyzing</think>"},
+				}
 				_ = json.NewEncoder(w).Encode(thinkResp)
 				flusher.Flush()
 			}
@@ -294,7 +296,10 @@ func TestChat(t *testing.T) {
 			} else {
 				// Thinking should be suppressed, not routed.
 				if mockWriter.thinking.Len() != 0 {
-					t.Errorf("expected thinking to be suppressed, got: %q", mockWriter.thinking.String())
+					t.Errorf(
+						"expected thinking to be suppressed, got: %q",
+						mockWriter.thinking.String(),
+					)
 				}
 			}
 

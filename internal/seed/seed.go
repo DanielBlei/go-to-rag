@@ -53,8 +53,12 @@ func DefaultManifest() (*Manifest, error) {
 
 // validateURL rejects GitHub blob/tree URLs that return HTML instead of raw content.
 func validateURL(url string) error {
-	if strings.Contains(url, "github.com/") && (strings.Contains(url, "/blob/") || strings.Contains(url, "/tree/")) {
-		return fmt.Errorf("URL %q points to a GitHub HTML page, use raw.githubusercontent.com instead", url)
+	if strings.Contains(url, "github.com/") &&
+		(strings.Contains(url, "/blob/") || strings.Contains(url, "/tree/")) {
+		return fmt.Errorf(
+			"URL %q points to a GitHub HTML page, use raw.githubusercontent.com instead",
+			url,
+		)
 	}
 	return nil
 }

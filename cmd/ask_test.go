@@ -16,30 +16,32 @@ import (
 
 func TestRunAsk_ThinkFlag(t *testing.T) {
 	// Create a mock Ollama server that handles /api/tags and /api/chat.
-	ollamaServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/api/tags":
-			models := []api.ListModelResponse{
-				{Model: testEmbedModel},
-				{Model: testChatModel},
+	ollamaServer := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/api/tags":
+				models := []api.ListModelResponse{
+					{Model: testEmbedModel},
+					{Model: testChatModel},
+				}
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(api.ListResponse{Models: models})
+			case "/api/chat":
+				w.Header().Set("Content-Type", "application/x-ndjson")
+				flusher := w.(http.Flusher)
+				// Return minimal answer response.
+				answerResp := api.ChatResponse{Message: api.Message{Content: "test answer"}}
+				_ = json.NewEncoder(w).Encode(answerResp)
+				flusher.Flush()
+				// Done sentinel.
+				doneResp := api.ChatResponse{Done: true}
+				_ = json.NewEncoder(w).Encode(doneResp)
+				flusher.Flush()
+			default:
+				http.NotFound(w, r)
 			}
-			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(api.ListResponse{Models: models})
-		case "/api/chat":
-			w.Header().Set("Content-Type", "application/x-ndjson")
-			flusher := w.(http.Flusher)
-			// Return minimal answer response.
-			answerResp := api.ChatResponse{Message: api.Message{Content: "test answer"}}
-			_ = json.NewEncoder(w).Encode(answerResp)
-			flusher.Flush()
-			// Done sentinel.
-			doneResp := api.ChatResponse{Done: true}
-			_ = json.NewEncoder(w).Encode(doneResp)
-			flusher.Flush()
-		default:
-			http.NotFound(w, r)
-		}
-	}))
+		}),
+	)
 	defer ollamaServer.Close()
 
 	tests := []struct {
