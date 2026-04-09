@@ -20,10 +20,14 @@ var (
 func init() {
 	rootCmd.AddCommand(mcpCmd)
 	addRAGFlags(mcpCmd)
-	mcpCmd.Flags().StringVar(&mcpAddr, "addr", "", `HTTP/SSE listen address (e.g. ":8080"); omit for STDIO`)
-	mcpCmd.Flags().IntVar(&mcpTopK, "top-k", 10, "number of chunks/top matches to retrieve from the vector store")
-	mcpCmd.Flags().StringVar(&mcpChatModel, "model", "", "Ollama chat model; required to enable the ask_to_rag_system chat tool")
-	mcpCmd.Flags().Var(&thinkModeFlag{val: &mcpThinkMode}, "think", "default thinking mode: auto, disabled, or hidden")
+	mcpCmd.Flags().
+		StringVar(&mcpAddr, "addr", "", `HTTP/SSE listen address (e.g. ":8080"); omit for STDIO`)
+	mcpCmd.Flags().
+		IntVar(&mcpTopK, "top-k", 10, "number of chunks/top matches to retrieve from the vector store")
+	mcpCmd.Flags().
+		StringVar(&mcpChatModel, "model", "", "Ollama chat model; required to enable the ask_to_rag_system chat tool")
+	mcpCmd.Flags().
+		Var(&thinkModeFlag{val: &mcpThinkMode}, "think", "default thinking mode: auto, disabled, or hidden")
 }
 
 var mcpCmd = &cobra.Command{

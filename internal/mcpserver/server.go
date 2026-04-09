@@ -39,7 +39,12 @@ type Server struct {
 }
 
 // New creates an MCP server backed by the given Pipeline and ChatServer.
-func New(retriever rag.Pipeline, chatServer rag.ChatServer, topK int, defaultThinkMode rag.ThinkMode) *Server {
+func New(
+	retriever rag.Pipeline,
+	chatServer rag.ChatServer,
+	topK int,
+	defaultThinkMode rag.ThinkMode,
+) *Server {
 	s := &Server{
 		retriever:        retriever,
 		chatServer:       chatServer,
@@ -101,7 +106,11 @@ type checkRAGKnowledgeBaseInput struct {
 }
 
 // checkRAGKnowledgeBase retrieves relevant chunks from the knowledge base and returns them as LLM-ready context.
-func (s *Server) checkRAGKnowledgeBase(ctx context.Context, _ *mcp.CallToolRequest, in checkRAGKnowledgeBaseInput) (*mcp.CallToolResult, any, error) {
+func (s *Server) checkRAGKnowledgeBase(
+	ctx context.Context,
+	_ *mcp.CallToolRequest,
+	in checkRAGKnowledgeBaseInput,
+) (*mcp.CallToolResult, any, error) {
 	log.Debug().Str("question", in.Question).Msg("check_rag_knowledge_base called")
 	ctx, cancel := context.WithTimeout(ctx, 300*time.Second)
 	defer cancel()
@@ -150,7 +159,11 @@ type askToRAGSystemInput struct {
 }
 
 // askToRAGSystem retrieves context and generates an LLM answer with optional thinking.
-func (s *Server) askToRAGSystem(ctx context.Context, _ *mcp.CallToolRequest, in askToRAGSystemInput) (*mcp.CallToolResult, any, error) {
+func (s *Server) askToRAGSystem(
+	ctx context.Context,
+	_ *mcp.CallToolRequest,
+	in askToRAGSystemInput,
+) (*mcp.CallToolResult, any, error) {
 	if in.Question == "" {
 		return nil, nil, fmt.Errorf("question is required")
 	}
@@ -162,7 +175,16 @@ func (s *Server) askToRAGSystem(ctx context.Context, _ *mcp.CallToolRequest, in 
 	log.Debug().Str("question", in.Question).Str("think", in.Think).Msg("ask_to_rag_system called")
 
 	bw := &bufWriter{}
-	if _, err := rag.Ask(ctx, s.retriever, s.chatServer, in.Question, s.topK, false, chatOpts, bw); err != nil {
+	if _, err := rag.Ask(
+		ctx,
+		s.retriever,
+		s.chatServer,
+		in.Question,
+		s.topK,
+		false,
+		chatOpts,
+		bw,
+	); err != nil {
 		return nil, nil, fmt.Errorf("ask: %w", err)
 	}
 	content := []mcp.Content{&mcp.TextContent{Text: bw.answer.String()}}

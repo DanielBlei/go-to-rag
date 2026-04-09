@@ -38,7 +38,11 @@ func New(host, embedModel, chatModel string) (*Client, error) {
 	}
 	for _, m := range []string{embedModel, chatModel} {
 		if m != "" && !strings.Contains(m, ":") {
-			return nil, fmt.Errorf("model %q has no tag, use an explicit tag to avoid pulling the wrong model (e.g. %s:latest)", m, m)
+			return nil, fmt.Errorf(
+				"model %q has no tag, use an explicit tag to avoid pulling the wrong model (e.g. %s:latest)",
+				m,
+				m,
+			)
 		}
 	}
 	return &Client{
@@ -111,10 +115,18 @@ func (c *Client) Embed(ctx context.Context, text string) ([]float32, error) {
 // contextBlock is optional; when non-empty it is prepended to the user message.
 // If systemPrompt is non-empty it is prepended as a system message, overriding
 // any system prompt embedded in the Modelfile.
-func (c *Client) Chat(ctx context.Context, systemPrompt, contextBlock, userPrompt string, opts rag.ChatOptions, w io.Writer) error {
+func (c *Client) Chat(
+	ctx context.Context,
+	systemPrompt, contextBlock, userPrompt string,
+	opts rag.ChatOptions,
+	w io.Writer,
+) error {
 	ctx, cancel := context.WithTimeout(ctx, chatTimeout)
 	defer cancel()
-	req := &api.ChatRequest{Model: c.chatModel, Messages: buildMessages(systemPrompt, contextBlock, userPrompt)}
+	req := &api.ChatRequest{
+		Model:    c.chatModel,
+		Messages: buildMessages(systemPrompt, contextBlock, userPrompt),
+	}
 
 	// Set Think=false when thinking is disabled.
 	if opts.ThinkMode == rag.ThinkDisabled {

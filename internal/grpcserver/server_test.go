@@ -36,7 +36,11 @@ func (f *fakeRetriever) Retrieve(_ context.Context, _ string, _ int) (string, er
 	return f.text, f.err
 }
 
-func (f *fakeRetriever) RetrieveChunks(_ context.Context, _ string, _ int) ([]vectorstore.Result, error) {
+func (f *fakeRetriever) RetrieveChunks(
+	_ context.Context,
+	_ string,
+	_ int,
+) ([]vectorstore.Result, error) {
 	return f.chunks, f.err
 }
 
@@ -50,7 +54,11 @@ func (f *slowFakeRetriever) Retrieve(_ context.Context, _ string, _ int) (string
 	return "slow", nil
 }
 
-func (f *slowFakeRetriever) RetrieveChunks(ctx context.Context, _ string, _ int) ([]vectorstore.Result, error) {
+func (f *slowFakeRetriever) RetrieveChunks(
+	ctx context.Context,
+	_ string,
+	_ int,
+) ([]vectorstore.Result, error) {
 	select {
 	case <-time.After(f.delay):
 		return f.chunks, nil
@@ -65,12 +73,18 @@ type fakeChatServer struct {
 	err      error
 }
 
-func (f *fakeChatServer) Chat(_ context.Context, _, _, _ string, opts rag.ChatOptions, w io.Writer) error {
+func (f *fakeChatServer) Chat(
+	_ context.Context,
+	_, _, _ string,
+	opts rag.ChatOptions,
+	w io.Writer,
+) error {
 	if f.err != nil {
 		return f.err
 	}
 	// Suppress thinking for ThinkHidden or ThinkDisabled modes, matching ollama.Client behavior.
-	if f.thinking != "" && opts.ThinkMode != rag.ThinkHidden && opts.ThinkMode != rag.ThinkDisabled {
+	if f.thinking != "" && opts.ThinkMode != rag.ThinkHidden &&
+		opts.ThinkMode != rag.ThinkDisabled {
 		if tw, ok := w.(thinkingWriter); ok {
 			_, _ = tw.WriteThinking([]byte(f.thinking))
 		}
@@ -86,7 +100,12 @@ type slowFakeChatServer struct {
 	delay    time.Duration
 }
 
-func (f *slowFakeChatServer) Chat(ctx context.Context, _, _, _ string, _ rag.ChatOptions, w io.Writer) error {
+func (f *slowFakeChatServer) Chat(
+	ctx context.Context,
+	_, _, _ string,
+	_ rag.ChatOptions,
+	w io.Writer,
+) error {
 	if f.err != nil {
 		return f.err
 	}
@@ -199,7 +218,13 @@ func TestRetrieveChunks_fieldRoundTrip(t *testing.T) {
 	want := vectorstore.Result{
 		Source: "olm.md", Text: "operator lifecycle", ChunkIndex: 3, Score: 0.92,
 	}
-	srv := New(&fakeRetriever{chunks: []vectorstore.Result{want}}, &fakeChatServer{}, 10, false, rag.ThinkAuto)
+	srv := New(
+		&fakeRetriever{chunks: []vectorstore.Result{want}},
+		&fakeChatServer{},
+		10,
+		false,
+		rag.ThinkAuto,
+	)
 	client := dialBufconn(t, srv)
 
 	resp, err := client.RetrieveChunks(context.Background(), &ragv1.RetrieveChunksRequest{
@@ -226,7 +251,12 @@ func TestRetrieveChunks_fieldRoundTrip(t *testing.T) {
 
 // drainAsk opens an Ask stream and collects all answer and thinking chunks into separate strings.
 // Errors from stream establishment or Recv are returned directly.
-func drainAsk(t *testing.T, ctx context.Context, client ragv1.RAGServiceClient, req *ragv1.AskRequest) (answer, thinking string, err error) {
+func drainAsk(
+	t *testing.T,
+	ctx context.Context,
+	client ragv1.RAGServiceClient,
+	req *ragv1.AskRequest,
+) (answer, thinking string, err error) {
 	t.Helper()
 	stream, err := client.Ask(ctx, req)
 	if err != nil {
@@ -262,7 +292,9 @@ func TestAsk(t *testing.T) {
 			retriever: &fakeRetriever{chunks: []vectorstore.Result{
 				{Text: "pods are the smallest deployable unit"},
 			}},
-			chatServer: &fakeChatServer{response: "Pods are the smallest deployable unit in Kubernetes."},
+			chatServer: &fakeChatServer{
+				response: "Pods are the smallest deployable unit in Kubernetes.",
+			},
 			thinkMode:  nil, // use server default
 			wantAnswer: "Pods are the smallest deployable unit in Kubernetes.",
 		},
@@ -449,7 +481,10 @@ func TestContextErrors(t *testing.T) {
 				}
 			} else {
 				// RetrieveChunks RPC test
-				_, err := client.RetrieveChunks(ctx, &ragv1.RetrieveChunksRequest{Question: "test?", TopK: 1})
+				_, err := client.RetrieveChunks(
+					ctx,
+					&ragv1.RetrieveChunksRequest{Question: "test?", TopK: 1},
+				)
 				if err == nil {
 					t.Fatal("expected error due to context issue, got nil")
 				}
@@ -493,12 +528,19 @@ func TestGetServerConfig(t *testing.T) {
 			srv := New(&fakeRetriever{}, &fakeChatServer{}, 10, false, tt.defaultThinkMode)
 			client := dialBufconn(t, srv)
 
-			resp, err := client.GetServerConfig(context.Background(), &ragv1.GetServerConfigRequest{})
+			resp, err := client.GetServerConfig(
+				context.Background(),
+				&ragv1.GetServerConfigRequest{},
+			)
 			if err != nil {
 				t.Fatalf("GetServerConfig: %v", err)
 			}
 			if resp.DefaultThinkMode != tt.wantDefaultThinkMode {
-				t.Errorf("DefaultThinkMode = %v, want %v", resp.DefaultThinkMode, tt.wantDefaultThinkMode)
+				t.Errorf(
+					"DefaultThinkMode = %v, want %v",
+					resp.DefaultThinkMode,
+					tt.wantDefaultThinkMode,
+				)
 			}
 		})
 	}
@@ -511,7 +553,10 @@ func TestHealthCheck(t *testing.T) {
 	client := grpc_health_v1.NewHealthClient(conn)
 
 	for _, service := range []string{"", "rag.v1.RAGService"} {
-		resp, err := client.Check(context.Background(), &grpc_health_v1.HealthCheckRequest{Service: service})
+		resp, err := client.Check(
+			context.Background(),
+			&grpc_health_v1.HealthCheckRequest{Service: service},
+		)
 		if err != nil {
 			t.Fatalf("service=%q: %v", service, err)
 		}

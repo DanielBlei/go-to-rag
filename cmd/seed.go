@@ -13,7 +13,8 @@ const defaultSeedDir = "./seeds"
 var manifestPath string
 
 func init() {
-	seedCmd.Flags().StringVar(&manifestPath, "manifest", "", "path to a custom YAML manifest of documents to download")
+	seedCmd.Flags().
+		StringVar(&manifestPath, "manifest", "", "path to a custom YAML manifest of documents to download")
 	rootCmd.AddCommand(seedCmd)
 }
 

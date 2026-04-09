@@ -27,11 +27,37 @@ type fakeStore struct {
 func (f *fakeStore) Search(_ context.Context, _ []float32, _ int) ([]vectorstore.Result, error) {
 	return f.results, f.err
 }
-func (f *fakeStore) AddChunk(_ context.Context, _, _ string, _ []float32, _ int) error { return nil }
-func (f *fakeStore) CountChunks(_ context.Context) (int, error)                        { return 0, nil }
-func (f *fakeStore) HasSource(_ context.Context, _ string) (bool, error)               { return false, nil }
-func (f *fakeStore) DeleteSource(_ context.Context, _ string) error                    { return nil }
-func (f *fakeStore) Close() error                                                      { return nil }
+
+func (f *fakeStore) AddChunk(
+	_ context.Context,
+	_, _ string,
+	_ []float32,
+	_ int,
+) error {
+	return nil
+}
+
+func (f *fakeStore) CountChunks(
+	_ context.Context,
+) (int, error) {
+	return 0, nil
+}
+
+func (f *fakeStore) HasSource(
+	_ context.Context,
+	_ string,
+) (bool, error) {
+	return false, nil
+}
+
+func (f *fakeStore) DeleteSource(
+	_ context.Context,
+	_ string,
+) error {
+	return nil
+}
+
+func (f *fakeStore) Close() error { return nil }
 
 // Compile-time interface validation
 var _ Embedder = (*fakeClient)(nil)
@@ -151,7 +177,12 @@ func TestRetrieveChunks(t *testing.T) {
 					t.Errorf("result[%d].Text = %q, want %q", i, r.Text, tt.want[i].Text)
 				}
 				if r.ChunkIndex != tt.want[i].ChunkIndex {
-					t.Errorf("result[%d].ChunkIndex = %d, want %d", i, r.ChunkIndex, tt.want[i].ChunkIndex)
+					t.Errorf(
+						"result[%d].ChunkIndex = %d, want %d",
+						i,
+						r.ChunkIndex,
+						tt.want[i].ChunkIndex,
+					)
 				}
 				if r.Score != tt.want[i].Score {
 					t.Errorf("result[%d].Score = %f, want %f", i, r.Score, tt.want[i].Score)

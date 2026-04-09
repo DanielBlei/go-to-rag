@@ -58,8 +58,10 @@ func init() {
 	rootCmd.AddCommand(askCmd)
 	addRAGFlags(askCmd)
 	askCmd.Flags().StringVar(&chatModel, "model", defaultChatModel, "Ollama chat model")
-	askCmd.Flags().BoolVar(&withFallback, "with-fallback", false, "allow the model to answer from its own knowledge when context is missing")
-	askCmd.Flags().IntVar(&topK, "top-k", 10, "number of chunks/top matches to retrieve from the vector store")
+	askCmd.Flags().
+		BoolVar(&withFallback, "with-fallback", false, "allow the model to answer from its own knowledge when context is missing")
+	askCmd.Flags().
+		IntVar(&topK, "top-k", 10, "number of chunks/top matches to retrieve from the vector store")
 	askCmd.Flags().Var(&thinkModeFlag{val: &thinkMode}, "think",
 		"control thinking tokens: auto (model default), disabled (no thinking), or hidden (model thinks but output suppressed)")
 }
@@ -103,7 +105,16 @@ func runAsk(cmd *cobra.Command, args []string) error {
 	writer := ollama.NewTerminalWriter(os.Stdout)
 	if store != nil {
 		pipeline := rag.NewPipeline(client, store)
-		contextBlock, err := rag.Ask(cmd.Context(), pipeline, client, prompt, topK, withFallback, chatOpts, writer)
+		contextBlock, err := rag.Ask(
+			cmd.Context(),
+			pipeline,
+			client,
+			prompt,
+			topK,
+			withFallback,
+			chatOpts,
+			writer,
+		)
 		if err != nil {
 			chatErr = err
 		}
@@ -137,7 +148,10 @@ func runAsk(cmd *cobra.Command, args []string) error {
 // store is unavailable for any reason, caller falls back to model knowledge.
 func openStore(ctx context.Context, path string) (vectorstore.Store, error) {
 	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
-		return nil, fmt.Errorf("store not found at %q, run 'ingest' to build one, or repoint --db", path)
+		return nil, fmt.Errorf(
+			"store not found at %q, run 'ingest' to build one, or repoint --db",
+			path,
+		)
 	}
 
 	store, err := vectorstore.NewSQLite(path)
@@ -152,7 +166,9 @@ func openStore(ctx context.Context, path string) (vectorstore.Store, error) {
 	}
 	if count == 0 {
 		_ = store.Close()
-		return nil, fmt.Errorf("store is empty, run 'ingest' to populate it and/or add more docs to the knowledge base")
+		return nil, fmt.Errorf(
+			"store is empty, run 'ingest' to populate it and/or add more docs to the knowledge base",
+		)
 	}
 
 	return store, nil

@@ -36,7 +36,12 @@ type ChatOptions struct {
 
 // ChatServer generates LLM responses from context and a prompt.
 type ChatServer interface {
-	Chat(ctx context.Context, systemPrompt, contextBlock, userPrompt string, opts ChatOptions, w io.Writer) error
+	Chat(
+		ctx context.Context,
+		systemPrompt, contextBlock, userPrompt string,
+		opts ChatOptions,
+		w io.Writer,
+	) error
 }
 
 // Embedder is the minimal interface Retrieve needs from the ollama client.
@@ -59,7 +64,11 @@ func (p *pipeline) Retrieve(ctx context.Context, query string, limit int) (strin
 	return Retrieve(ctx, query, limit, p.embedder, p.store)
 }
 
-func (p *pipeline) RetrieveChunks(ctx context.Context, query string, limit int) ([]vectorstore.Result, error) {
+func (p *pipeline) RetrieveChunks(
+	ctx context.Context,
+	query string,
+	limit int,
+) ([]vectorstore.Result, error) {
 	return RetrieveChunks(ctx, query, limit, p.embedder, p.store)
 }
 
@@ -69,7 +78,13 @@ func NewPipeline(embedder Embedder, store vectorstore.Store) Pipeline {
 }
 
 // RetrieveChunks embeds the query, searches the store, and returns structured results.
-func RetrieveChunks(ctx context.Context, query string, limit int, client Embedder, store vectorstore.Store) ([]vectorstore.Result, error) {
+func RetrieveChunks(
+	ctx context.Context,
+	query string,
+	limit int,
+	client Embedder,
+	store vectorstore.Store,
+) ([]vectorstore.Result, error) {
 	vec, err := client.Embed(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("embed query: %w", err)
@@ -85,7 +100,13 @@ func RetrieveChunks(ctx context.Context, query string, limit int, client Embedde
 
 // Retrieve embeds the query, searches the store, and returns the top results
 // joined as a single string. Returns "" if no results are found.
-func Retrieve(ctx context.Context, query string, limit int, client Embedder, store vectorstore.Store) (string, error) {
+func Retrieve(
+	ctx context.Context,
+	query string,
+	limit int,
+	client Embedder,
+	store vectorstore.Store,
+) (string, error) {
 	results, err := RetrieveChunks(ctx, query, limit, client, store)
 	if err != nil {
 		return "", err
@@ -105,7 +126,16 @@ func Retrieve(ctx context.Context, query string, limit int, client Embedder, sto
 // Ask retrieves context via the pipeline, selects a system prompt, and streams
 // the LLM answer to w. Returns the retrieved context block so callers can
 // inspect it (e.g. to log empty results).
-func Ask(ctx context.Context, retriever Pipeline, chat ChatServer, question string, topK int, withFallback bool, opts ChatOptions, w io.Writer) (string, error) {
+func Ask(
+	ctx context.Context,
+	retriever Pipeline,
+	chat ChatServer,
+	question string,
+	topK int,
+	withFallback bool,
+	opts ChatOptions,
+	w io.Writer,
+) (string, error) {
 	contextBlock, err := retriever.Retrieve(ctx, question, topK)
 	if err != nil {
 		return "", fmt.Errorf("retrieve: %w", err)

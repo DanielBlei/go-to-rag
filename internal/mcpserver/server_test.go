@@ -24,7 +24,11 @@ func (f *fakeRetriever) Retrieve(_ context.Context, _ string, _ int) (string, er
 	return f.context, f.err
 }
 
-func (f *fakeRetriever) RetrieveChunks(_ context.Context, _ string, _ int) ([]vectorstore.Result, error) {
+func (f *fakeRetriever) RetrieveChunks(
+	_ context.Context,
+	_ string,
+	_ int,
+) ([]vectorstore.Result, error) {
 	return nil, f.err
 }
 
@@ -36,7 +40,12 @@ type fakeChatServer struct {
 	gotOpts  rag.ChatOptions
 }
 
-func (f *fakeChatServer) Chat(_ context.Context, _, _, _ string, opts rag.ChatOptions, w io.Writer) error {
+func (f *fakeChatServer) Chat(
+	_ context.Context,
+	_, _, _ string,
+	opts rag.ChatOptions,
+	w io.Writer,
+) error {
 	f.gotOpts = opts
 	if f.err != nil {
 		return f.err

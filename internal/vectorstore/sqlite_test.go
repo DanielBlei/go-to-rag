@@ -115,7 +115,11 @@ func TestSearchRankingAndScores(t *testing.T) {
 		t.Errorf("expected score ~1.0 for identical vector, got %f", results[0].Score)
 	}
 	if math.Abs(results[1].Score) > 1e-6 || math.Abs(results[2].Score) > 1e-6 {
-		t.Errorf("expected score ~0 for orthogonal vectors, got %f %f", results[1].Score, results[2].Score)
+		t.Errorf(
+			"expected score ~0 for orthogonal vectors, got %f %f",
+			results[1].Score,
+			results[2].Score,
+		)
 	}
 }
 

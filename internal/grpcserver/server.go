@@ -44,7 +44,12 @@ type Server struct {
 	srv               *grpc.Server
 }
 
-func unaryLoggingInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+func unaryLoggingInterceptor(
+	ctx context.Context,
+	req any,
+	info *grpc.UnaryServerInfo,
+	handler grpc.UnaryHandler,
+) (any, error) {
 	start := time.Now()
 	resp, err := handler(ctx, req)
 	ev := log.Info()
@@ -58,7 +63,12 @@ func unaryLoggingInterceptor(ctx context.Context, req any, info *grpc.UnaryServe
 	return resp, err
 }
 
-func streamLoggingInterceptor(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+func streamLoggingInterceptor(
+	srv any,
+	ss grpc.ServerStream,
+	info *grpc.StreamServerInfo,
+	handler grpc.StreamHandler,
+) error {
 	start := time.Now()
 	err := handler(srv, ss)
 	ev := log.Info()
@@ -75,7 +85,14 @@ func streamLoggingInterceptor(srv any, ss grpc.ServerStream, info *grpc.StreamSe
 // New creates a gRPC server backed by the given Pipeline and ChatServer.
 // opts are forwarded to grpc.NewServer and can be used to configure TLS,
 // interceptors, and other server-level options.
-func New(retriever rag.Pipeline, chatServer rag.ChatServer, topK int, serveWithFallback bool, defaultThinkMode rag.ThinkMode, opts ...grpc.ServerOption) *Server {
+func New(
+	retriever rag.Pipeline,
+	chatServer rag.ChatServer,
+	topK int,
+	serveWithFallback bool,
+	defaultThinkMode rag.ThinkMode,
+	opts ...grpc.ServerOption,
+) *Server {
 	s := &Server{
 		retriever:         retriever,
 		chatServer:        chatServer,
@@ -158,7 +175,16 @@ func (s *Server) Ask(req *ragv1.AskRequest, stream ragv1.RAGService_AskServer) e
 	chatOpts := rag.ChatOptions{ThinkMode: thinkMode}
 
 	ctx := stream.Context()
-	_, askErr := rag.Ask(ctx, s.retriever, s.chatServer, question, topK, s.serveWithFallback, chatOpts, &streamWriter{stream: stream})
+	_, askErr := rag.Ask(
+		ctx,
+		s.retriever,
+		s.chatServer,
+		question,
+		topK,
+		s.serveWithFallback,
+		chatOpts,
+		&streamWriter{stream: stream},
+	)
 	if askErr != nil {
 		if errors.Is(askErr, context.DeadlineExceeded) {
 			return status.Error(codes.DeadlineExceeded, "request timed out")
@@ -172,14 +198,20 @@ func (s *Server) Ask(req *ragv1.AskRequest, stream ragv1.RAGService_AskServer) e
 }
 
 // GetServerConfig returns the server's current default configurations.
-func (s *Server) GetServerConfig(_ context.Context, _ *ragv1.GetServerConfigRequest) (*ragv1.GetServerConfigResponse, error) {
+func (s *Server) GetServerConfig(
+	_ context.Context,
+	_ *ragv1.GetServerConfigRequest,
+) (*ragv1.GetServerConfigResponse, error) {
 	return &ragv1.GetServerConfigResponse{
 		DefaultThinkMode: ragv1.ThinkMode(s.defaultThinkMode),
 	}, nil
 }
 
 // RetrieveChunks returns scored chunks from the vector store.
-func (s *Server) RetrieveChunks(ctx context.Context, req *ragv1.RetrieveChunksRequest) (*ragv1.RetrieveChunksResponse, error) {
+func (s *Server) RetrieveChunks(
+	ctx context.Context,
+	req *ragv1.RetrieveChunksRequest,
+) (*ragv1.RetrieveChunksResponse, error) {
 	question, err := validateQuestion(req.Question)
 	if err != nil {
 		return nil, err
