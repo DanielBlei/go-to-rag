@@ -101,8 +101,20 @@ make docker-demo CONTAINER_TOOL=docker
 
 ## Project Roadmap
 
-Next up: **Multi-agent Compose** - domain-scoped RAG agents behind a
-router with concurrent fan-out queries.
+### Shared inference backend (vLLM) 
+
+vLLM is the recommended inference layer for production multi-agent deployments (see below).
+
+One model served across all agents, with concurrent fan-out handled efficiently via continuous batching — vLLM processes requests from multiple agents together rather than sequentially, which is the primary advantage over per-agent Ollama processes under load.
+It also allows running a single, larger model rather than loading multiple smaller instances per agent, making better use of available GPU resources.
+
+vLLM's OpenAI-compatible endpoint makes it a drop-in replacement at the client level, no changes to agent logic required.
+
+> **Note:** For development purposes, Ollama is the default
+
+### Multi-agent Compose
+
+Domain-scoped RAG agents behind a router with concurrent fan-out queries.
 
 The gRPC layer provides the service-to-service backbone: each domain agent is a
 `go-to-rag` instance serving its own knowledge base over gRPC, and the router
@@ -123,6 +135,8 @@ graph TB
     A["go-to-rag<br/>Knowledge A<br/>:50051"]
     B["go-to-rag<br/>Knowledge B<br/>:50052"]
     C["go-to-rag<br/>Knowledge C<br/>:50053"]
+    
+    V["vLLM<br/>Shared Inference<br/>:8000"]
 
     User --> R
     LLM --> R
@@ -130,6 +144,10 @@ graph TB
     R <--> A
     R <--> B
     R <--> C
+    
+    A -.-> V
+    B -.-> V
+    C -.-> V
 
     style User fill:#6B4FBB,color:#fff
     style LLM fill:#6B4FBB,color:#fff
@@ -138,6 +156,7 @@ graph TB
     style A fill:#244c5a,color:#fff
     style B fill:#244c5a,color:#fff
     style C fill:#244c5a,color:#fff
+    style V fill:#8B6F47,color:#fff
 ```
 
 ## Contributing
