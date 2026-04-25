@@ -201,7 +201,11 @@ func TestBuildHermeticPipeline(t *testing.T) {
 		}
 	}
 
-	setup, err := BuildHermeticPipeline(context.Background(), detEmbedder{}, corpus, 64, 0)
+	setup, err := BuildHermetic(context.Background(), detEmbedder{}, HermeticOptions{
+		CorpusDir: corpus,
+		ChunkSize: 64,
+		WorkDir:   t.TempDir(),
+	})
 	if err != nil {
 		t.Fatalf("build: %v", err)
 	}
@@ -224,38 +228,98 @@ func TestBuildHermeticPipeline(t *testing.T) {
 	}
 }
 
-func TestBuildHermeticPipeline_CleanupRemovesTmpDir(t *testing.T) {
+func TestBuildHermetic_FreshCleanupRemovesTmpDir(t *testing.T) {
 	corpus := t.TempDir()
 	if err := os.WriteFile(filepath.Join(corpus, "a.md"), []byte("hi"), 0o600); err != nil {
 		t.Fatalf("write: %v", err)
 	}
-	setup, err := BuildHermeticPipeline(context.Background(), detEmbedder{}, corpus, 64, 0)
+	workDir := t.TempDir()
+	setup, err := BuildHermetic(context.Background(), detEmbedder{}, HermeticOptions{
+		CorpusDir: corpus,
+		ChunkSize: 64,
+		WorkDir:   workDir,
+	})
 	if err != nil {
 		t.Fatalf("build: %v", err)
 	}
 
-	tmpEntries, _ := os.ReadDir(os.TempDir())
-	beforeCount := 0
-	for _, e := range tmpEntries {
-		if strings.HasPrefix(e.Name(), "go-to-rag-eval-") {
-			beforeCount++
-		}
-	}
-	if beforeCount == 0 {
-		t.Fatalf("expected at least one go-to-rag-eval-* tmp dir before cleanup")
+	entries, _ := os.ReadDir(workDir)
+	if len(entries) == 0 {
+		t.Fatalf("expected a tmp-* dir under WorkDir before cleanup")
 	}
 
 	setup.Cleanup()
 
-	tmpEntries, _ = os.ReadDir(os.TempDir())
-	afterCount := 0
-	for _, e := range tmpEntries {
-		if strings.HasPrefix(e.Name(), "go-to-rag-eval-") {
-			afterCount++
-		}
+	entries, _ = os.ReadDir(workDir)
+	if len(entries) != 0 {
+		t.Fatalf("cleanup did not remove tmp dir, entries remain: %v", entries)
 	}
-	if afterCount >= beforeCount {
-		t.Fatalf("cleanup did not remove tmp dir (before=%d after=%d)", beforeCount, afterCount)
+}
+
+func TestBuildHermetic_ReuseRoundTrip(t *testing.T) {
+	corpus := t.TempDir()
+	if err := os.WriteFile(filepath.Join(corpus, "a.md"), []byte("hello"), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	workDir := t.TempDir()
+	meta := HermeticMeta{EmbedModelDigest: "sha256:abc", CorpusHash: "sha256:c0", ChunkSize: 64}
+
+	first, err := BuildHermetic(context.Background(), detEmbedder{}, HermeticOptions{
+		CorpusDir: corpus, ChunkSize: 64, WorkDir: workDir, Reuse: true, Meta: meta,
+	})
+	if err != nil {
+		t.Fatalf("first build: %v", err)
+	}
+	first.Cleanup()
+	if _, err := os.Stat(filepath.Join(workDir, "run.db")); err != nil {
+		t.Fatalf("cache db missing after first build: %v", err)
+	}
+
+	second, err := BuildHermetic(context.Background(), detEmbedder{}, HermeticOptions{
+		CorpusDir: corpus, ChunkSize: 64, WorkDir: workDir, Reuse: true, Meta: meta,
+	})
+	if err != nil {
+		t.Fatalf("reuse: %v", err)
+	}
+	defer second.Cleanup()
+	if len(second.Sources) != 1 || second.Sources[0] != "a.md" {
+		t.Fatalf("reuse sources wrong: %v", second.Sources)
+	}
+}
+
+func TestBuildHermetic_ReuseMetaMismatch(t *testing.T) {
+	corpus := t.TempDir()
+	if err := os.WriteFile(filepath.Join(corpus, "a.md"), []byte("hi"), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	workDir := t.TempDir()
+	first, err := BuildHermetic(context.Background(), detEmbedder{}, HermeticOptions{
+		CorpusDir: corpus, ChunkSize: 64, WorkDir: workDir, Reuse: true,
+		Meta: HermeticMeta{CorpusHash: "sha256:old"},
+	})
+	if err != nil {
+		t.Fatalf("first build: %v", err)
+	}
+	first.Cleanup()
+
+	_, err = BuildHermetic(context.Background(), detEmbedder{}, HermeticOptions{
+		CorpusDir: corpus, ChunkSize: 64, WorkDir: workDir, Reuse: true,
+		Meta: HermeticMeta{CorpusHash: "sha256:new"},
+	})
+	if err == nil {
+		t.Fatalf("expected meta mismatch error")
+	}
+	if !strings.Contains(err.Error(), "meta mismatch") {
+		t.Fatalf("expected 'meta mismatch' in error, got %v", err)
+	}
+}
+
+func TestBuildHermetic_RequiresWorkDir(t *testing.T) {
+	_, err := BuildHermetic(context.Background(), detEmbedder{}, HermeticOptions{
+		CorpusDir: t.TempDir(), ChunkSize: 64,
+	})
+	if err == nil {
+		t.Fatalf("expected error when WorkDir is empty")
 	}
 }
 

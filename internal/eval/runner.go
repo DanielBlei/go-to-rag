@@ -2,8 +2,10 @@ package eval
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -57,68 +59,199 @@ type Summary struct {
 // as rag.Embedder; redeclared so callers can pass any compatible client.
 type Embedder = rag.Embedder
 
-// HermeticSetup bundles the result of BuildHermeticPipeline for clarity.
+// HermeticSetup bundles the result of BuildHermetic for clarity.
 type HermeticSetup struct {
-	Pipeline  rag.Pipeline
-	Sources   []string
-	Cleanup   func()
+	Pipeline rag.Pipeline
+	Sources  []string
+	Cleanup  func()
 }
 
-// BuildHermeticPipeline ingests every *.md file under corpusDir into a fresh
-// SQLite vector store and returns a HermeticSetup backed by that store.
-// The list of ingested source identifiers is corpus-relative paths.
+// HermeticMeta records the inputs that determine a hermetic pipeline's
+// embedding output. Used to validate a reused SQLite cache.
+type HermeticMeta struct {
+	EmbedModelDigest string `json:"embed_model_digest"`
+	CorpusHash       string `json:"corpus_hash"`
+	ChunkSize        int    `json:"chunk_size"`
+	Overlap          int    `json:"overlap"`
+}
+
+// HermeticOptions configures BuildHermetic. WorkDir is the base directory
+// where caches and tmp dirs live (typically a repo-local path so users can
+// inspect them); CorpusDir, ChunkSize and Overlap are the ingest knobs.
+//
+// When Reuse is false (default), BuildHermetic creates a tmp directory under
+// WorkDir, ingests into it, and Cleanup removes the tmp dir.
+// When Reuse is true, BuildHermetic uses <WorkDir>/run.db as a persistent
+// cache; Meta is validated against a side-car .meta.json on every open and
+// written on first build. Cleanup closes the store but leaves the cache.
+type HermeticOptions struct {
+	CorpusDir string
+	ChunkSize int
+	Overlap   int
+	WorkDir   string
+	Reuse     bool
+	Meta      HermeticMeta
+}
+
+const cacheDBName = "run.db"
+
+// BuildHermetic ingests every *.md file under opts.CorpusDir into a SQLite
+// vector store and returns a HermeticSetup backed by that store. See
+// HermeticOptions for the choice between fresh and reused caches.
 //
 // Callers must call Cleanup even on error from Run.
-func BuildHermeticPipeline(
-	ctx context.Context,
-	embedder Embedder,
-	corpusDir string,
-	chunkSize, overlap int,
-) (*HermeticSetup, error) {
-	tmpDir, err := os.MkdirTemp("", "go-to-rag-eval-*")
-	if err != nil {
-		return nil, fmt.Errorf("eval: mkdir temp: %w", err)
+func BuildHermetic(ctx context.Context, embedder Embedder, opts HermeticOptions) (*HermeticSetup, error) {
+	if opts.WorkDir == "" {
+		return nil, fmt.Errorf("eval: HermeticOptions.WorkDir is required")
 	}
-	cleanup := func() {
-		_ = os.RemoveAll(tmpDir)
+	if err := os.MkdirAll(opts.WorkDir, 0o755); err != nil {
+		return nil, fmt.Errorf("eval: prepare work dir %q: %w", opts.WorkDir, err)
 	}
 
+	if opts.Reuse {
+		return buildReuse(ctx, embedder, opts)
+	}
+	return buildFresh(ctx, embedder, opts)
+}
+
+func buildFresh(ctx context.Context, embedder Embedder, opts HermeticOptions) (*HermeticSetup, error) {
+	tmpDir, err := os.MkdirTemp(opts.WorkDir, "tmp-*")
+	if err != nil {
+		return nil, fmt.Errorf("eval: mkdir tmp: %w", err)
+	}
 	dbPath := filepath.Join(tmpDir, "eval.db")
 	store, err := vectorstore.NewSQLite(dbPath)
 	if err != nil {
-		cleanup()
+		_ = os.RemoveAll(tmpDir)
 		return nil, fmt.Errorf("eval: open vector store: %w", err)
 	}
-	combined := func() {
+	cleanup := func() {
 		_ = store.Close()
 		_ = os.RemoveAll(tmpDir)
 	}
+	sources, err := ingestCorpus(ctx, store, embedder, opts)
+	if err != nil {
+		cleanup()
+		return nil, fmt.Errorf("eval: ingest corpus: %w", err)
+	}
+	return &HermeticSetup{
+		Pipeline: rag.NewPipeline(embedder, store),
+		Sources:  sources,
+		Cleanup:  cleanup,
+	}, nil
+}
 
-	sourcePath := func(p string) (string, error) {
-		rel, err := filepath.Rel(corpusDir, p)
-		if err != nil {
-			return "", err
+func buildReuse(ctx context.Context, embedder Embedder, opts HermeticOptions) (*HermeticSetup, error) {
+	dbPath := filepath.Join(opts.WorkDir, cacheDBName)
+	metaPath := dbPath + ".meta.json"
+
+	if _, err := os.Stat(dbPath); err == nil {
+		existing, mErr := readMeta(metaPath)
+		if mErr != nil {
+			return nil, fmt.Errorf("eval: read cache meta %q: %w (delete %q to rebuild)", metaPath, mErr, opts.WorkDir)
 		}
-		return rel, nil
+		if existing != opts.Meta {
+			return nil, fmt.Errorf(
+				"eval: cache meta mismatch (cache=%+v current=%+v); delete %q to rebuild",
+				existing, opts.Meta, opts.WorkDir,
+			)
+		}
+		store, err := vectorstore.NewSQLite(dbPath)
+		if err != nil {
+			return nil, fmt.Errorf("eval: open cache %q: %w", dbPath, err)
+		}
+		sources, err := listSources(opts.CorpusDir)
+		if err != nil {
+			_ = store.Close()
+			return nil, err
+		}
+		return &HermeticSetup{
+			Pipeline: rag.NewPipeline(embedder, store),
+			Sources:  sources,
+			Cleanup:  func() { _ = store.Close() },
+		}, nil
 	}
 
-	sources, _, err := ingest.Run(ctx, store, embedder, corpusDir, ingest.Options{
-		ChunkSize:    chunkSize,
-		Overlap:      overlap,
+	store, err := vectorstore.NewSQLite(dbPath)
+	if err != nil {
+		return nil, fmt.Errorf("eval: open cache %q: %w", dbPath, err)
+	}
+	sources, err := ingestCorpus(ctx, store, embedder, opts)
+	if err != nil {
+		_ = store.Close()
+		_ = os.Remove(dbPath)
+		return nil, fmt.Errorf("eval: ingest corpus into cache: %w", err)
+	}
+	if err := writeMeta(metaPath, opts.Meta); err != nil {
+		_ = store.Close()
+		_ = os.Remove(dbPath)
+		return nil, fmt.Errorf("eval: write cache meta: %w", err)
+	}
+	return &HermeticSetup{
+		Pipeline: rag.NewPipeline(embedder, store),
+		Sources:  sources,
+		Cleanup:  func() { _ = store.Close() },
+	}, nil
+}
+
+func ingestCorpus(
+	ctx context.Context,
+	store vectorstore.Store,
+	embedder Embedder,
+	opts HermeticOptions,
+) ([]string, error) {
+	sourcePath := func(p string) (string, error) { return filepath.Rel(opts.CorpusDir, p) }
+	sources, _, err := ingest.Run(ctx, store, embedder, opts.CorpusDir, ingest.Options{
+		ChunkSize:    opts.ChunkSize,
+		Overlap:      opts.Overlap,
 		Glob:         "*.md",
 		SkipExisting: false,
 		SourcePath:   sourcePath,
 	})
-	if err != nil {
-		combined()
-		return nil, fmt.Errorf("eval: ingest corpus: %w", err)
-	}
+	return sources, err
+}
 
-	return &HermeticSetup{
-		Pipeline: rag.NewPipeline(embedder, store),
-		Sources:  sources,
-		Cleanup:  combined,
-	}, nil
+func readMeta(path string) (HermeticMeta, error) {
+	var m HermeticMeta
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return m, err
+	}
+	if err := json.Unmarshal(data, &m); err != nil {
+		return m, fmt.Errorf("decode meta: %w", err)
+	}
+	return m, nil
+}
+
+func writeMeta(path string, m HermeticMeta) error {
+	data, err := json.MarshalIndent(m, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0o600)
+}
+
+// listSources returns the corpus-relative paths of every .md file under corpusDir.
+func listSources(corpusDir string) ([]string, error) {
+	var out []string
+	err := filepath.WalkDir(corpusDir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		if filepath.Ext(p) != ".md" {
+			return nil
+		}
+		rel, err := filepath.Rel(corpusDir, p)
+		if err != nil {
+			return err
+		}
+		out = append(out, rel)
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list corpus: %w", err)
+	}
+	return out, nil
 }
 
 // Run executes every query in dataset against pipeline and returns a Report.

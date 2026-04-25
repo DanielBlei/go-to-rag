@@ -1,6 +1,6 @@
 # Corpus Snapshot
 
-This directory holds a frozen subset of the project's seed documents used by the
+The corpus folder holds a frozen subset of the project's seed documents used by the
 retrieval-evaluation harness. Treat it as test fixtures: pin the bytes, do not
 re-pull at eval time.
 
