@@ -94,6 +94,23 @@ func modelAvailable(models []api.ListModelResponse, want string) bool {
 	return false
 }
 
+// EmbedModelDigest returns the SHA-256 digest of the configured embed model.
+func (c *Client) EmbedModelDigest(ctx context.Context) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, defaultTimeout)
+	defer cancel()
+	resp, err := c.api.List(ctx)
+	if err != nil {
+		return "", fmt.Errorf("list models: %w", err)
+	}
+	wantBase := strings.TrimSuffix(c.embedModel, ":latest")
+	for _, m := range resp.Models {
+		if strings.TrimSuffix(m.Model, ":latest") == wantBase {
+			return m.Digest, nil
+		}
+	}
+	return "", fmt.Errorf("model %q not found in ollama list", c.embedModel)
+}
+
 // Embed returns the embedding vector for the given text.
 func (c *Client) Embed(ctx context.Context, text string) ([]float32, error) {
 	ctx, cancel := context.WithTimeout(ctx, defaultTimeout)
