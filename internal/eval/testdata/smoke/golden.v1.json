@@ -1,0 +1,17 @@
+[
+  {
+    "id": "s001",
+    "query": "what is retrieval augmented generation",
+    "expected_sources": ["alpha.md"]
+  },
+  {
+    "id": "s002",
+    "query": "transformer attention and tokenization",
+    "expected_sources": ["beta.md"]
+  },
+  {
+    "id": "s003",
+    "query": "compare RAG embeddings with LLM tokenization",
+    "expected_sources": ["alpha.md", "beta.md"]
+  }
+]
