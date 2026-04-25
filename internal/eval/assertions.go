@@ -73,6 +73,10 @@ func ReciprocalRank(retrieved []vectorstore.Result, expected []string) float64 {
 
 // PrecisionAtK is |sourceSet(retrieved, k) ∩ expected| / |sourceSet(retrieved, k)|.
 // Returns 0 when no sources are retrieved.
+//
+// Note: this is "precision at distinct sources within top-K", not the textbook
+// chunk-level P@K. With chunk-level retrieval, multiple chunks from the same
+// source collapse into one before scoring.
 func PrecisionAtK(retrieved []vectorstore.Result, expected []string, k int) float64 {
 	got := sourceSet(retrieved, k)
 	if len(got) == 0 {
