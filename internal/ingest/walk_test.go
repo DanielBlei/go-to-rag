@@ -1,4 +1,4 @@
-package cmd
+package ingest
 
 import (
 	"os"
@@ -36,69 +36,48 @@ func TestWalkFiles(t *testing.T) {
 	writeFile(hiddenDirMD)
 
 	tests := []struct {
-		name         string
-		root         string
-		glob         string
-		noRecursive  bool
-		noSkipHidden bool
-		want         []string
-		wantErr      bool
+		name          string
+		root          string
+		glob          string
+		noRecursive   bool
+		includeHidden bool
+		want          []string
+		wantErr       bool
 	}{
 		{
-			name:         "recurses by default",
-			root:         dir,
-			glob:         "*.md",
-			noRecursive:  false,
-			noSkipHidden: false,
-			want:         []string{rootMD, subMD},
+			name: "recurses by default",
+			root: dir, glob: "*.md",
+			want: []string{rootMD, subMD},
 		},
 		{
-			name:         "no-recursive finds only root files",
-			root:         dir,
-			glob:         "*.md",
-			noRecursive:  true,
-			noSkipHidden: false,
-			want:         []string{rootMD},
+			name: "no-recursive finds only root files",
+			root: dir, glob: "*.md", noRecursive: true,
+			want: []string{rootMD},
 		},
 		{
-			name:         "hidden dir skipped by default",
-			root:         dir,
-			glob:         "*.md",
-			noRecursive:  false,
-			noSkipHidden: false,
-			want:         []string{rootMD, subMD},
+			name: "hidden dir skipped by default",
+			root: dir, glob: "*.md",
+			want: []string{rootMD, subMD},
 		},
 		{
-			name:         "no-skip-hidden includes hidden dirs and files",
-			root:         dir,
-			glob:         "*.md",
-			noRecursive:  false,
-			noSkipHidden: true,
-			want:         []string{hiddenMD, hiddenDirMD, rootMD, subMD},
+			name: "include-hidden includes hidden dirs and files",
+			root: dir, glob: "*.md", includeHidden: true,
+			want: []string{hiddenMD, hiddenDirMD, rootMD, subMD},
 		},
 		{
-			name:         "hidden file skipped by default",
-			root:         dir,
-			glob:         "*.md",
-			noRecursive:  true,
-			noSkipHidden: false,
-			want:         []string{rootMD},
+			name: "hidden file skipped by default",
+			root: dir, glob: "*.md", noRecursive: true,
+			want: []string{rootMD},
 		},
 		{
-			name:         "glob filters by extension",
-			root:         dir,
-			glob:         "*.txt",
-			noRecursive:  false,
-			noSkipHidden: false,
-			want:         []string{rootTXT},
+			name: "glob filters by extension",
+			root: dir, glob: "*.txt",
+			want: []string{rootTXT},
 		},
 		{
-			name:         "no matches returns empty slice",
-			root:         dir,
-			glob:         "*.go",
-			noRecursive:  false,
-			noSkipHidden: false,
-			want:         nil,
+			name: "no matches returns empty slice",
+			root: dir, glob: "*.go",
+			want: nil,
 		},
 		{
 			name:    "nonexistent root returns error",
@@ -116,7 +95,7 @@ func TestWalkFiles(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := walkFiles(tt.root, tt.glob, tt.noRecursive, tt.noSkipHidden)
+			got, err := walkFiles(tt.root, tt.glob, tt.noRecursive, tt.includeHidden)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("walkFiles() error = %v, wantErr %v", err, tt.wantErr)
 			}

@@ -7,9 +7,8 @@ package eval
 //	  ...
 //	]
 //
-// Future v2 may add graded relevance (per-source scores) without breaking v1
-// readers. Loaders should reject unknown top-level fields only at major
-// version bumps.
+// Future v2 may add graded relevance (per-source scores) without breaking v1 readers.
+// Loaders should reject unknown top-level fields only at major version bumps.
 
 import (
 	"bufio"
@@ -20,6 +19,9 @@ import (
 	"strings"
 )
 
+// utf8BOM is the UTF-8 byte order mark.
+// Some editors (Excel, Notepad) add it when saving UTF-8 files
+// LoadGolden strips it before JSON parsing.
 var utf8BOM = []byte{0xEF, 0xBB, 0xBF}
 
 // GoldenQuery is a single record in a golden.v1.json file.
@@ -37,7 +39,7 @@ func LoadGolden(path string) ([]GoldenQuery, error) {
 	if err != nil {
 		return nil, fmt.Errorf("golden open: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	br := bufio.NewReader(f)
 	if bom, _ := br.Peek(3); bytes.Equal(bom, utf8BOM) {
@@ -81,7 +83,10 @@ func LoadGolden(path string) ([]GoldenQuery, error) {
 				return nil, fmt.Errorf("golden %s record %d: expected_sources[%d] is blank (id=%s)", path, idx, i, q.ID)
 			}
 			if _, dup := seenSrc[s]; dup {
-				return nil, fmt.Errorf("golden %s record %d: expected_sources[%d] duplicates %q (id=%s)", path, idx, i, s, q.ID)
+				return nil, fmt.Errorf(
+					"golden %s record %d: expected_sources[%d] duplicates %q (id=%s)",
+					path, idx, i, s, q.ID,
+				)
 			}
 			seenSrc[s] = struct{}{}
 		}
