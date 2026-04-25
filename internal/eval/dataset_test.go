@@ -127,6 +127,31 @@ func TestLoadGolden_FileNotFound(t *testing.T) {
 	}
 }
 
+func TestLoadGolden_RealGoldenFile(t *testing.T) {
+	got, err := LoadGolden("testdata/golden.v1.json")
+	if err != nil {
+		t.Fatalf("real golden file failed to load: %v", err)
+	}
+	if len(got) != 20 {
+		t.Fatalf("expected 20 queries, got %d", len(got))
+	}
+	corpusFiles := map[string]bool{
+		"kubernetes_pods.md":          true,
+		"kubernetes_operators.md":     true,
+		"kubernetes_crds.md":          true,
+		"olm_architecture.md":         true,
+		"openshift_routes.md":         true,
+		"kubebuilder_introduction.md": true,
+	}
+	for _, q := range got {
+		for _, src := range q.ExpectedSources {
+			if !corpusFiles[src] {
+				t.Errorf("%s: expected_source %q is not in the frozen corpus", q.ID, src)
+			}
+		}
+	}
+}
+
 func TestLoadGolden_SmokeFixture(t *testing.T) {
 	got, err := LoadGolden("testdata/smoke/golden.v1.json")
 	if err != nil {
