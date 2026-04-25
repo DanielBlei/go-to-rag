@@ -1,15 +1,10 @@
 // Package eval provides a deterministic, LLM-free retrieval evaluation harness.
-//
-// Metric semantics: source-granularity, binary relevance. A retrieved chunk is
-// relevant iff its Source matches one of the query's expected sources by exact
-// string equality. Multiple chunks from the same source collapse to one match
-// (deduplicated by Source).
 package eval
 
 import "github.com/DanielBlei/go-to-rag/internal/vectorstore"
 
 // sourceSet returns the unique sources in the first k results.
-// k is clamped to [0, len(retrieved)].
+// k is capped at len(retrieved); non-positive k returns an empty set.
 func sourceSet(retrieved []vectorstore.Result, k int) map[string]struct{} {
 	if k <= 0 {
 		return map[string]struct{}{}
@@ -33,8 +28,7 @@ func expectedSet(expected []string) map[string]struct{} {
 	return set
 }
 
-// HitAtK reports whether any expected source appears in the top-k retrieved
-// results.
+// HitAtK reports whether any expected source appears in the top-k retrieved results.
 func HitAtK(retrieved []vectorstore.Result, expected []string, k int) bool {
 	if len(expected) == 0 {
 		return false
@@ -48,9 +42,9 @@ func HitAtK(retrieved []vectorstore.Result, expected []string, k int) bool {
 	return false
 }
 
-// ReciprocalRank returns 1/rank of the first retrieved result whose source is
-// in expected (1-indexed, source-deduplicated). Returns 0 if no expected source
-// is retrieved.
+// ReciprocalRank returns 1/rank of the first retrieved result
+// whose source is in expected (1-indexed, source-deduplicated).
+// Returns 0 if no expected source is retrieved.
 func ReciprocalRank(retrieved []vectorstore.Result, expected []string) float64 {
 	if len(expected) == 0 || len(retrieved) == 0 {
 		return 0
@@ -74,9 +68,8 @@ func ReciprocalRank(retrieved []vectorstore.Result, expected []string) float64 {
 // PrecisionAtK is |sourceSet(retrieved, k) ∩ expected| / |sourceSet(retrieved, k)|.
 // Returns 0 when no sources are retrieved.
 //
-// Note: this is "precision at distinct sources within top-K", not the textbook
-// chunk-level P@K. With chunk-level retrieval, multiple chunks from the same
-// source collapse into one before scoring.
+// Note: this is source-level precision, not chunk-level P@K.
+// Multiple chunks from the same source collapse into one before scoring.
 func PrecisionAtK(retrieved []vectorstore.Result, expected []string, k int) float64 {
 	got := sourceSet(retrieved, k)
 	if len(got) == 0 {
@@ -94,6 +87,9 @@ func PrecisionAtK(retrieved []vectorstore.Result, expected []string, k int) floa
 
 // RecallAtK is |sourceSet(retrieved, k) ∩ expected| / |expected|.
 // Returns 0 when expected is empty.
+//
+// Note: this is source-level recall, not chunk-level R@K.
+// Multiple chunks from the same source collapse into one before scoring.
 func RecallAtK(retrieved []vectorstore.Result, expected []string, k int) float64 {
 	if len(expected) == 0 {
 		return 0
