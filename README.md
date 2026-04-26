@@ -50,6 +50,7 @@ See [docs/quickstart.md](docs/quickstart.md) for the full pipeline walkthrough a
 | `ask <prompt>` | RAG-augmented question, retrieves relevant chunks and streams the answer |
 | `seed [dir]` | Download K8s/OLM/OpenShift docs for ingestion (default: `./seeds`) |
 | `ingest [path]` | Chunk, embed, and index documents into SQLite (default: `./seeds`) |
+| `eval` | Assert retrieval quality against a golden query set and produce a reproducible report |
 | `mcp` | Start the MCP server for external LLM integration (stdio by default, SSE with `--addr`) |
 | `serve` | Start the gRPC server (default `:50051`); exposes `Ask` (streaming) and `RetrieveChunks` RPCs |
 
@@ -86,6 +87,12 @@ The default chat model (`qwen3:1.7b`) is balanced for speed and quality on devel
 For any CLI command, pass `--model` directly instead. See [Quickstart](#quickstart) and [`modelfiles/`](modelfiles/README.md).
 
 > **Note:** Out-of-the-box Ollama models aren't tuned for RAG. For best results, use one of the provided Modelfiles, which prioritise answering questions.
+
+## Evaluation
+
+`eval` measures retrieval quality before you rely on the pipeline. It runs assertion-based metrics against a frozen corpus and a golden query set: no judge, no external calls beyond the embedding model, and the same inputs always produce the same numbers. Use it to validate changes to chunk size, overlap, or embedding model before committing them.
+
+An LLM Judge tier for correctness and faithfulness scoring is planned once the assertion baseline is stable. See [docs/eval.md](docs/eval.md) for usage, metrics, and the full methodology.
 
 ## Docker
 
