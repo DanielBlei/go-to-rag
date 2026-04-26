@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"slices"
 	"text/tabwriter"
 )
 
@@ -33,6 +34,7 @@ type resultsBlock struct {
 // runtimeBlock holds runtime characteristics — diagnostic, not evaluative.
 type runtimeBlock struct {
 	MedianLatencyMS float64 `json:"median_latency_ms"`
+	P95LatencyMS    float64 `json:"p95_latency_ms"`
 }
 
 // similarityBlock holds rank-1 similarity statistics across queries —
@@ -46,15 +48,17 @@ type similarityBlock struct {
 // jsonReport is the on-disk shape. Field order mirrors lm-evaluation-harness:
 // quality results separated from runtime, configs, and per-sample logs.
 type jsonReport struct {
-	Results        resultsBlock    `json:"results"`
-	Runtime        runtimeBlock    `json:"runtime"`
-	Similarity     similarityBlock `json:"similarity"`
-	HigherIsBetter map[string]bool `json:"higher_is_better"`
-	NSamples       int             `json:"n_samples"`
-	NFailed        int             `json:"n_failed"`
-	Partial        bool            `json:"partial,omitempty"`
-	Config         *Config         `json:"config,omitempty"`
-	Samples        []QueryResult   `json:"samples"`
+	Results          resultsBlock           `json:"results"`
+	PerType          map[string]TypeSummary `json:"per_type,omitempty"`
+	RankDistribution RankHistogram          `json:"rank_distribution"`
+	Runtime          runtimeBlock           `json:"runtime"`
+	Similarity       similarityBlock        `json:"similarity"`
+	HigherIsBetter   map[string]bool        `json:"higher_is_better"`
+	NSamples         int                    `json:"n_samples"`
+	NFailed          int                    `json:"n_failed"`
+	Partial          bool                   `json:"partial,omitempty"`
+	Config           *Config                `json:"config,omitempty"`
+	Samples          []QueryResult          `json:"samples"`
 }
 
 func (r *Report) toJSON() jsonReport {
@@ -71,7 +75,12 @@ func (r *Report) toJSON() jsonReport {
 			Precision: r.Summary.Precision,
 			Recall:    r.Summary.Recall,
 		},
-		Runtime: runtimeBlock{MedianLatencyMS: r.Summary.MedianLatencyMS},
+		PerType:          r.Summary.PerType,
+		RankDistribution: r.Summary.RankDistribution,
+		Runtime: runtimeBlock{
+			MedianLatencyMS: r.Summary.MedianLatencyMS,
+			P95LatencyMS:    r.Summary.P95LatencyMS,
+		},
 		Similarity: similarityBlock{
 			Min:    r.Summary.MinSimilarity,
 			Median: r.Summary.MedianSimilarity,
@@ -133,8 +142,30 @@ func (r *Report) WriteText(w io.Writer) error {
 	bw.printf("  Precision@K  %.4f\n", r.Summary.Precision)
 	bw.printf("  Recall@K     %.4f\n", r.Summary.Recall)
 
+	if len(r.Summary.PerType) > 0 {
+		bw.printf("\nBy query type\n")
+		tw := tabwriter.NewWriter(bw, 0, 0, 2, ' ', 0)
+		_, _ = fmt.Fprintln(tw, "  type\tn\thit\tmrr\tp@k\tr@k")
+		for _, t := range sortedTypes(r.Summary.PerType) {
+			ts := r.Summary.PerType[t]
+			_, _ = fmt.Fprintf(tw, "  %s\t%d\t%.4f\t%.4f\t%.4f\t%.4f\n",
+				t, ts.N, ts.HitRate, ts.MRR, ts.Precision, ts.Recall)
+		}
+		if err := tw.Flush(); err != nil {
+			return fmt.Errorf("flush per-type block: %w", err)
+		}
+	}
+
+	rd := r.Summary.RankDistribution
+	bw.printf("\nRank of first hit\n")
+	bw.printf("  rank=1    %d\n", rd.Rank1)
+	bw.printf("  rank=2-3  %d\n", rd.Rank2_3)
+	bw.printf("  rank=4-K  %d\n", rd.Rank4_K)
+	bw.printf("  miss      %d\n", rd.Miss)
+
 	bw.printf("\nLatency (ms)\n")
 	bw.printf("  median  %.1f\n", r.Summary.MedianLatencyMS)
+	bw.printf("  p95     %.1f\n", r.Summary.P95LatencyMS)
 
 	bw.printf("\nTop score (rank-1 similarity)\n")
 	bw.printf("  min     %.4f\n", r.Summary.MinSimilarity)
@@ -144,20 +175,66 @@ func (r *Report) WriteText(w io.Writer) error {
 	if len(r.Queries) > 0 {
 		bw.printf("\nPer-query\n")
 		tw := tabwriter.NewWriter(bw, 0, 0, 2, ' ', 0)
-		_, _ = fmt.Fprintln(tw, "  id\thit\trr\tp@k\tr@k\ttop\tms\tnote")
+		_, _ = fmt.Fprintln(tw, "  id\ttype\thit\trank\trr\tp@k\tr@k\ttop\tms\tnote")
 		for _, q := range r.Queries {
 			note := ""
 			if q.Error != "" {
 				note = "error: " + q.Error
 			}
-			_, _ = fmt.Fprintf(tw, "  %s\t%v\t%.2f\t%.2f\t%.2f\t%.3f\t%d\t%s\n",
-				q.ID, q.HitAtK, q.ReciprocalRank, q.PrecisionAtK, q.RecallAtK, q.TopScore, q.LatencyMS, note)
+			rank := "-"
+			if q.Error == "" {
+				if k := rankFromRR(q.ReciprocalRank); k > 0 {
+					rank = fmt.Sprintf("%d", k)
+				}
+			}
+			typeStr := q.Type
+			if typeStr == "" {
+				typeStr = "-"
+			}
+			_, _ = fmt.Fprintf(
+				tw,
+				"  %s\t%s\t%v\t%s\t%.2f\t%.2f\t%.2f\t%.3f\t%d\t%s\n",
+				q.ID,
+				typeStr,
+				q.HitAtK,
+				rank,
+				q.ReciprocalRank,
+				q.PrecisionAtK,
+				q.RecallAtK,
+				q.TopScore,
+				q.LatencyMS,
+				note,
+			)
 		}
 		if err := tw.Flush(); err != nil {
 			return fmt.Errorf("flush per-query block: %w", err)
 		}
 	}
 	return bw.err
+}
+
+// sortedTypes returns the keys of m in a stable order: known types first
+// (direct, multi-doc, adversarial), then any others alphabetically.
+func sortedTypes(m map[string]TypeSummary) []string {
+	order := []string{TypeDirect, TypeMultiDoc, TypeAdversarial}
+	out := make([]string, 0, len(m))
+	seen := make(map[string]struct{}, len(m))
+	for _, t := range order {
+		if _, ok := m[t]; ok {
+			out = append(out, t)
+			seen[t] = struct{}{}
+		}
+	}
+	var rest []string
+	for t := range m {
+		if _, ok := seen[t]; ok {
+			continue
+		}
+		rest = append(rest, t)
+	}
+	slices.Sort(rest)
+	out = append(out, rest...)
+	return out
 }
 
 type errWriter struct {

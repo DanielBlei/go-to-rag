@@ -1,101 +1,121 @@
 [
   {
     "id": "q001",
+    "type": "direct",
     "query": "what is a pod in kubernetes",
     "expected_sources": ["kubernetes_pods.md"]
   },
   {
     "id": "q002",
+    "type": "direct",
     "query": "what is a kubernetes operator",
     "expected_sources": ["kubernetes_operators.md"]
   },
   {
     "id": "q003",
+    "type": "direct",
     "query": "how to create a custom resource definition",
     "expected_sources": ["kubernetes_crds.md"]
   },
   {
     "id": "q004",
+    "type": "direct",
     "query": "what is a ClusterServiceVersion",
     "expected_sources": ["olm_architecture.md"]
   },
   {
     "id": "q005",
+    "type": "direct",
     "query": "openshift custom route configuration",
     "expected_sources": ["openshift_routes.md"]
   },
   {
     "id": "q006",
+    "type": "direct",
     "query": "introduction to kubebuilder",
     "expected_sources": ["kubebuilder_introduction.md"]
   },
   {
     "id": "q007",
+    "type": "direct",
     "query": "pod templates and workload resources",
     "expected_sources": ["kubernetes_pods.md"]
   },
   {
     "id": "q008",
+    "type": "direct",
     "query": "OLM operator and catalog operator architecture",
     "expected_sources": ["olm_architecture.md"]
   },
   {
     "id": "q009",
+    "type": "direct",
     "query": "structural schema and field pruning in CRDs",
     "expected_sources": ["kubernetes_crds.md"]
   },
   {
     "id": "q010",
+    "type": "direct",
     "query": "operator pattern motivation in kubernetes",
     "expected_sources": ["kubernetes_operators.md"]
   },
   {
     "id": "q011",
+    "type": "direct",
     "query": "InstallPlan and Subscription control loops",
     "expected_sources": ["olm_architecture.md"]
   },
   {
     "id": "q012",
+    "type": "direct",
     "query": "Pod OS and scheduling groups",
     "expected_sources": ["kubernetes_pods.md"]
   },
   {
     "id": "q013",
+    "type": "multi-doc",
     "query": "operators built on top of custom resource definitions",
     "expected_sources": ["kubernetes_operators.md", "kubernetes_crds.md"]
   },
   {
     "id": "q014",
+    "type": "multi-doc",
     "query": "kubebuilder for writing kubernetes operators",
     "expected_sources": ["kubebuilder_introduction.md", "kubernetes_operators.md"]
   },
   {
     "id": "q015",
+    "type": "multi-doc",
     "query": "ClusterServiceVersion that references a CRD",
     "expected_sources": ["olm_architecture.md", "kubernetes_crds.md"]
   },
   {
     "id": "q016",
+    "type": "multi-doc",
     "query": "pods managed by operators",
     "expected_sources": ["kubernetes_pods.md", "kubernetes_operators.md"]
   },
   {
     "id": "q017",
+    "type": "multi-doc",
     "query": "openshift routing and operator deployment",
     "expected_sources": ["openshift_routes.md", "kubernetes_operators.md"]
   },
   {
     "id": "q018",
+    "type": "multi-doc",
     "query": "kubebuilder scaffolding for CRDs",
     "expected_sources": ["kubebuilder_introduction.md", "kubernetes_crds.md"]
   },
   {
     "id": "q019",
+    "type": "adversarial",
     "query": "the smallest deployable unit of computing in k8s",
     "expected_sources": ["kubernetes_pods.md"]
   },
   {
     "id": "q020",
+    "type": "adversarial",
     "query": "extending the API server with new resource types",
     "expected_sources": ["kubernetes_crds.md"]
   }

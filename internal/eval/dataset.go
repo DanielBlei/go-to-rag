@@ -24,11 +24,29 @@ import (
 // LoadGolden strips it before JSON parsing.
 var utf8BOM = []byte{0xEF, 0xBB, 0xBF}
 
+// Query types used to slice the aggregate report. Optional on each record:
+// untyped queries still count toward the overall aggregate, but do not
+// contribute to any per-type rollup.
+const (
+	TypeDirect      = "direct"
+	TypeMultiDoc    = "multi-doc"
+	TypeAdversarial = "adversarial"
+)
+
+var validTypes = map[string]struct{}{
+	TypeDirect:      {},
+	TypeMultiDoc:    {},
+	TypeAdversarial: {},
+}
+
 // GoldenQuery is a single record in a golden.v1.json file.
 type GoldenQuery struct {
 	ID              string   `json:"id"`
 	Query           string   `json:"query"`
 	ExpectedSources []string `json:"expected_sources"`
+	// Type is optional. When set, must be one of TypeDirect, TypeMultiDoc,
+	// TypeAdversarial. Empty string is allowed and means untyped.
+	Type string `json:"type,omitempty"`
 }
 
 // LoadGolden reads a golden.v1.json file from path and returns the parsed queries.
@@ -88,6 +106,14 @@ func LoadGolden(path string) ([]GoldenQuery, error) {
 				)
 			}
 			seenSrc[s] = struct{}{}
+		}
+		if q.Type != "" {
+			if _, ok := validTypes[q.Type]; !ok {
+				return nil, fmt.Errorf(
+					"golden %s record %d: unknown type %q (want %q, %q, %q, or empty) (id=%s)",
+					path, idx, q.Type, TypeDirect, TypeMultiDoc, TypeAdversarial, q.ID,
+				)
+			}
 		}
 		if prev, dup := seen[q.ID]; dup {
 			return nil, fmt.Errorf("golden %s record %d: duplicate id %q (first seen record %d)", path, idx, q.ID, prev)

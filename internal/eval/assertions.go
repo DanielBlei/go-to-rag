@@ -89,6 +89,9 @@ func PrecisionAtK(retrieved []vectorstore.Result, expected []string, k int) floa
 //
 // Note: this is source-level recall, not chunk-level R@K.
 // Multiple chunks from the same source collapse into one before scoring.
+// When k < |expected|, recall is bounded above by k/|expected|. Pick k with
+// that ceiling in mind for multi-source queries, otherwise a perfect retriever
+// will still score below 1.0 on the recall axis.
 func RecallAtK(retrieved []vectorstore.Result, expected []string, k int) float64 {
 	if len(expected) == 0 {
 		return 0
