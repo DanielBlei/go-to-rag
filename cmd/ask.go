@@ -61,7 +61,7 @@ func init() {
 	askCmd.Flags().
 		BoolVar(&withFallback, "with-fallback", false, "allow the model to answer from its own knowledge when context is missing")
 	askCmd.Flags().
-		IntVar(&topK, "top-k", 10, "number of chunks/top matches to retrieve from the vector store")
+		IntVar(&topK, "top-k", defaultTopK, "number of chunks/top matches to retrieve from the vector store")
 	askCmd.Flags().Var(&thinkModeFlag{val: &thinkMode}, "think",
 		"control thinking tokens: auto (model default), disabled (no thinking), or hidden (model thinks but output suppressed)")
 }

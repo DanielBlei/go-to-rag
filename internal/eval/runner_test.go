@@ -309,18 +309,36 @@ func TestBuildHermetic_ReuseMetaMismatch(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected meta mismatch error")
 	}
-	if !strings.Contains(err.Error(), "meta mismatch") {
-		t.Fatalf("expected 'meta mismatch' in error, got %v", err)
+	if !strings.Contains(err.Error(), "stale") {
+		t.Fatalf("expected stale-cache error, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "corpus_hash") {
+		t.Fatalf("expected changed field name in error, got %v", err)
 	}
 }
 
-func TestBuildHermetic_RequiresWorkDir(t *testing.T) {
+func TestBuildHermetic_ReuseRequiresWorkDir(t *testing.T) {
 	_, err := BuildHermetic(context.Background(), detEmbedder{}, HermeticOptions{
-		CorpusDir: t.TempDir(), ChunkSize: 64,
+		CorpusDir: t.TempDir(), ChunkSize: 64, Reuse: true,
 	})
 	if err == nil {
-		t.Fatalf("expected error when WorkDir is empty")
+		t.Fatalf("expected error when Reuse=true and WorkDir is empty")
 	}
+}
+
+func TestBuildHermetic_FreshNoWorkDir(t *testing.T) {
+	corpus := t.TempDir()
+	if err := os.WriteFile(filepath.Join(corpus, "a.md"), []byte("hello"), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	setup, err := BuildHermetic(context.Background(), detEmbedder{}, HermeticOptions{
+		CorpusDir: corpus, ChunkSize: 64,
+		// WorkDir intentionally omitted — should use OS temp dir, no project footprint
+	})
+	if err != nil {
+		t.Fatalf("fresh build without WorkDir: %v", err)
+	}
+	setup.Cleanup()
 }
 
 func TestMedianInt64(t *testing.T) {

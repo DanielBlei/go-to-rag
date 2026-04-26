@@ -84,10 +84,21 @@ func (c *Client) wantedModels(checkEmbed, checkChat bool) []string {
 	return models
 }
 
+// normalizeModelName ensures the model name has an explicit tag.
+// Ollama's list API may return names without a tag when the tag is "latest".
+// New() requires callers to pass tagged names, so this is only needed for
+// API response normalisation before comparison.
+func normalizeModelName(m string) string {
+	if !strings.Contains(m, ":") {
+		return m + ":latest"
+	}
+	return m
+}
+
 func modelAvailable(models []api.ListModelResponse, want string) bool {
-	wantBase := strings.TrimSuffix(want, ":latest")
+	want = normalizeModelName(want)
 	for _, m := range models {
-		if strings.TrimSuffix(m.Model, ":latest") == wantBase {
+		if normalizeModelName(m.Model) == want {
 			return true
 		}
 	}
@@ -102,9 +113,9 @@ func (c *Client) EmbedModelDigest(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("list models: %w", err)
 	}
-	wantBase := strings.TrimSuffix(c.embedModel, ":latest")
+	want := normalizeModelName(c.embedModel)
 	for _, m := range resp.Models {
-		if strings.TrimSuffix(m.Model, ":latest") == wantBase {
+		if normalizeModelName(m.Model) == want {
 			return m.Digest, nil
 		}
 	}
