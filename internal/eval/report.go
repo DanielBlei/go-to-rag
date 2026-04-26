@@ -86,7 +86,6 @@ func (r *Report) toJSON() jsonReport {
 	}
 }
 
-// WriteJSON writes the report as a stable, indented JSON document.
 func (r *Report) WriteJSON(w io.Writer) error {
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
@@ -96,8 +95,7 @@ func (r *Report) WriteJSON(w io.Writer) error {
 	return nil
 }
 
-// WriteText writes a human-scannable report. Layout is intentionally flat;
-// the JSON output is the source of truth for downstream tooling.
+// WriteText writes a human-scannable report. Layout is intentionally flat.
 func (r *Report) WriteText(w io.Writer) error {
 	failed := 0
 	for _, q := range r.Queries {

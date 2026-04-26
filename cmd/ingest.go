@@ -24,8 +24,8 @@ var (
 func init() {
 	rootCmd.AddCommand(ingestCmd)
 	addRAGFlags(ingestCmd)
-	ingestCmd.Flags().IntVar(&chunkSize, "chunk-size", 512, "chunk size in characters")
-	ingestCmd.Flags().IntVar(&overlap, "overlap", 100, "overlap between chunks in characters")
+	ingestCmd.Flags().IntVar(&chunkSize, "chunk-size", defaultChunkSize, "chunk size in characters")
+	ingestCmd.Flags().IntVar(&overlap, "overlap", defaultOverlap, "overlap between chunks in characters")
 	ingestCmd.Flags().StringVar(&globPat, "glob", "*.md", "glob pattern to match files")
 	ingestCmd.Flags().
 		BoolVar(&noRecursive, "no-recursive", false, "only match files in the root directory, do not recurse")

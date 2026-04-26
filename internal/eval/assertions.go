@@ -42,9 +42,8 @@ func HitAtK(retrieved []vectorstore.Result, expected []string, k int) bool {
 	return false
 }
 
-// ReciprocalRank returns 1/rank of the first retrieved result
-// whose source is in expected (1-indexed, source-deduplicated).
-// Returns 0 if no expected source is retrieved.
+// ReciprocalRank scores by rank of first match (1/Rank)
+// Sources are deduplicated so multiple chunks from the same doc count as one position.
 func ReciprocalRank(retrieved []vectorstore.Result, expected []string) float64 {
 	if len(expected) == 0 || len(retrieved) == 0 {
 		return 0

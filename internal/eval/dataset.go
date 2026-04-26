@@ -31,9 +31,8 @@ type GoldenQuery struct {
 	ExpectedSources []string `json:"expected_sources"`
 }
 
-// LoadGolden reads a golden.v1.json file from path and returns the parsed
-// queries. Unknown fields, duplicate IDs, and records with empty required
-// fields cause an error annotated with the record index.
+// LoadGolden reads a golden.v1.json file from path and returns the parsed queries.
+// Unknown fields, duplicate IDs, and records with empty required fields cause an error annotated with the record index.
 func LoadGolden(path string) ([]GoldenQuery, error) {
 	f, err := os.Open(path)
 	if err != nil {

@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/DanielBlei/go-to-rag/internal/ingest"
@@ -26,9 +27,7 @@ type QueryResult struct {
 	ReciprocalRank   float64  `json:"reciprocal_rank"`
 	PrecisionAtK     float64  `json:"precision_at_k"`
 	RecallAtK        float64  `json:"recall_at_k"`
-	// TopScore is retrieved[0].Score when retrieved is non-empty, else 0.
-	// It is not the maximum across the top-K, despite what the name might
-	// suggest at first read.
+	// TopScore is the similarity score of the rank-1 retrieved chunk, or 0 if nothing was retrieved.
 	TopScore  float64 `json:"top_score"`
 	LatencyMS int64   `json:"latency_ms"`
 	Error     string  `json:"error,omitempty"`
@@ -75,15 +74,15 @@ type HermeticMeta struct {
 	Overlap          int    `json:"overlap"`
 }
 
-// HermeticOptions configures BuildHermetic. WorkDir is the base directory
-// where caches and tmp dirs live (typically a repo-local path so users can
-// inspect them); CorpusDir, ChunkSize and Overlap are the ingest knobs.
+// HermeticOptions configures BuildHermetic.
 //
-// When Reuse is false (default), BuildHermetic creates a tmp directory under
-// WorkDir, ingests into it, and Cleanup removes the tmp dir.
-// When Reuse is true, BuildHermetic uses <WorkDir>/run.db as a persistent
-// cache; Meta is validated against a side-car .meta.json on every open and
-// written on first build. Cleanup closes the store but leaves the cache.
+// When Reuse is true, BuildHermetic uses <WorkDir>/run.db as a persistent cache.
+// Meta is validated against a side-car .meta.json on every open and written on first build.
+// A mismatch means the embedding configuration changed and the cache must be rebuilt.
+// WorkDir is required when Reuse is true. Cleanup closes the store but leaves  the cache on disk.
+//
+// When Reuse is false (default), BuildHermetic creates a tmp directory (under WorkDir  if set, otherwise under the OS temp dir),
+// ingests into it, and Cleanup removes the tmp dir entirely. WorkDir is optional and not created.
 type HermeticOptions struct {
 	CorpusDir string
 	ChunkSize int
@@ -97,25 +96,27 @@ const cacheDBName = "run.db"
 
 // BuildHermetic ingests every *.md file under opts.CorpusDir into a SQLite
 // vector store and returns a HermeticSetup backed by that store. See
-// HermeticOptions for the choice between fresh and reused caches.
+// HermeticOptions for the choice between persistent and ephemeral caches.
 //
 // Callers must call Cleanup even on error from Run.
 func BuildHermetic(ctx context.Context, embedder Embedder, opts HermeticOptions) (*HermeticSetup, error) {
-	if opts.WorkDir == "" {
-		return nil, fmt.Errorf("eval: HermeticOptions.WorkDir is required")
-	}
-	if err := os.MkdirAll(opts.WorkDir, 0o755); err != nil {
-		return nil, fmt.Errorf("eval: prepare work dir %q: %w", opts.WorkDir, err)
-	}
-
 	if opts.Reuse {
+		if opts.WorkDir == "" {
+			return nil, fmt.Errorf("eval: HermeticOptions.WorkDir is required when Reuse is true")
+		}
+		if err := os.MkdirAll(opts.WorkDir, 0o755); err != nil {
+			return nil, fmt.Errorf("eval: prepare work dir %q: %w", opts.WorkDir, err)
+		}
 		return buildReuse(ctx, embedder, opts)
 	}
 	return buildFresh(ctx, embedder, opts)
 }
 
 func buildFresh(ctx context.Context, embedder Embedder, opts HermeticOptions) (*HermeticSetup, error) {
-	tmpDir, err := os.MkdirTemp(opts.WorkDir, "tmp-*")
+	// opts.WorkDir is optional: if set, the tmp dir lands there (useful for
+	// tests that need to inspect it); if empty, the OS temp dir is used so the
+	// run leaves no footprint in the project directory.
+	tmpDir, err := os.MkdirTemp(opts.WorkDir, "go-to-rag-eval-*")
 	if err != nil {
 		return nil, fmt.Errorf("eval: mkdir tmp: %w", err)
 	}
@@ -152,8 +153,8 @@ func buildReuse(ctx context.Context, embedder Embedder, opts HermeticOptions) (*
 		}
 		if existing != opts.Meta {
 			return nil, fmt.Errorf(
-				"eval: cache meta mismatch (cache=%+v current=%+v); delete %q to rebuild",
-				existing, opts.Meta, opts.WorkDir,
+				"eval: cache is stale — embedding configuration changed (%s); delete %q to rebuild",
+				metaDiff(existing, opts.Meta), opts.WorkDir,
 			)
 		}
 		store, err := vectorstore.NewSQLite(dbPath)
@@ -229,6 +230,28 @@ func writeMeta(path string, m HermeticMeta) error {
 		return err
 	}
 	return os.WriteFile(path, data, 0o600)
+}
+
+// metaDiff returns a human-readable description of the fields that differ
+// between old and new, suitable for embedding in an error message.
+func metaDiff(old, new HermeticMeta) string {
+	var parts []string
+	if old.EmbedModelDigest != new.EmbedModelDigest {
+		parts = append(parts, fmt.Sprintf("embed_model_digest: %q → %q", old.EmbedModelDigest, new.EmbedModelDigest))
+	}
+	if old.CorpusHash != new.CorpusHash {
+		parts = append(parts, fmt.Sprintf("corpus_hash: %q → %q", old.CorpusHash, new.CorpusHash))
+	}
+	if old.ChunkSize != new.ChunkSize {
+		parts = append(parts, fmt.Sprintf("chunk_size: %d → %d", old.ChunkSize, new.ChunkSize))
+	}
+	if old.Overlap != new.Overlap {
+		parts = append(parts, fmt.Sprintf("overlap: %d → %d", old.Overlap, new.Overlap))
+	}
+	if len(parts) == 0 {
+		return "unknown field"
+	}
+	return strings.Join(parts, ", ")
 }
 
 // listSources returns the corpus-relative paths of every .md file under corpusDir.

@@ -26,6 +26,9 @@ const (
 	defaultEmbedModel = "mxbai-embed-large:latest"
 	defaultChatModel  = "qwen3:1.7b"
 	defaultDBPath     = "./data/index.db"
+	defaultTopK       = 10
+	defaultChunkSize  = 512
+	defaultOverlap    = 100
 )
 
 var rootCmd = &cobra.Command{
