@@ -28,9 +28,16 @@ func sampleReport() *Report {
 			Precision:        0.42,
 			Recall:           0.78,
 			MedianLatencyMS:  87,
+			P95LatencyMS:     142,
 			MinSimilarity:    0.31,
 			MedianSimilarity: 0.62,
 			MaxSimilarity:    0.91,
+			RankDistribution: RankHistogram{Rank1: 12, Rank2_3: 4, Rank4_K: 1, Miss: 3},
+			PerType: map[string]TypeSummary{
+				TypeDirect:      {N: 12, HitRate: 1.0, MRR: 0.95, Precision: 0.45, Recall: 1.0},
+				TypeMultiDoc:    {N: 6, HitRate: 0.83, MRR: 0.65, Precision: 0.40, Recall: 0.55},
+				TypeAdversarial: {N: 2, HitRate: 0.50, MRR: 0.50, Precision: 0.10, Recall: 0.50},
+			},
 		},
 		Queries: []QueryResult{
 			{ID: "q1", Query: "alpha", ExpectedSources: []string{"a.md"},
@@ -60,6 +67,15 @@ func TestWriteJSON_RoundTrip(t *testing.T) {
 	}
 	if got.Runtime.MedianLatencyMS != 87 {
 		t.Fatalf("runtime median wrong: %v", got.Runtime.MedianLatencyMS)
+	}
+	if got.Runtime.P95LatencyMS != 142 {
+		t.Fatalf("runtime p95 wrong: %v", got.Runtime.P95LatencyMS)
+	}
+	if got.RankDistribution.Rank1 != 12 || got.RankDistribution.Miss != 3 {
+		t.Fatalf("rank distribution wrong: %+v", got.RankDistribution)
+	}
+	if got.PerType[TypeDirect].N != 12 || got.PerType[TypeAdversarial].HitRate != 0.50 {
+		t.Fatalf("per_type wrong: %+v", got.PerType)
 	}
 	if got.Similarity.Max != 0.91 {
 		t.Fatalf("similarity max wrong: %v", got.Similarity.Max)
@@ -103,7 +119,14 @@ func TestWriteText_ContainsKeyMetrics(t *testing.T) {
 		"MRR",
 		"Precision@K",
 		"Recall@K",
+		"By query type",
+		"direct",
+		"multi-doc",
+		"adversarial",
+		"Rank of first hit",
+		"rank=1",
 		"Latency (ms)",
+		"p95",
 		"Top score",
 		"Per-query",
 		"q1",

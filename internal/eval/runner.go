@@ -20,6 +20,7 @@ import (
 // QueryResult is the per-query outcome of a single retrieval evaluation.
 type QueryResult struct {
 	ID               string   `json:"id"`
+	Type             string   `json:"type,omitempty"`
 	Query            string   `json:"query"`
 	ExpectedSources  []string `json:"expected_sources"`
 	RetrievedSources []string `json:"retrieved_sources"`
@@ -49,9 +50,39 @@ type Summary struct {
 	Precision        float64 `json:"precision"`
 	Recall           float64 `json:"recall"`
 	MedianLatencyMS  float64 `json:"median_latency_ms"`
+	P95LatencyMS     float64 `json:"p95_latency_ms"`
 	MinSimilarity    float64 `json:"min_similarity"`
 	MedianSimilarity float64 `json:"median_similarity"`
 	MaxSimilarity    float64 `json:"max_similarity"`
+
+	// RankDistribution buckets the rank of the first hit across successful
+	// queries. Diagnostic complement to MRR: MRR collapses the distribution
+	// into a scalar, the histogram shows whether misses cluster near the top
+	// or trail in the long tail.
+	RankDistribution RankHistogram `json:"rank_distribution"`
+
+	// PerType is keyed by GoldenQuery.Type. Untyped queries are excluded.
+	// Types with no successful queries do not appear.
+	PerType map[string]TypeSummary `json:"per_type,omitempty"`
+}
+
+// RankHistogram counts successful queries by the rank of the first hit.
+// Rank1 + Rank2_3 + Rank4_K + Miss equals the number of successful queries.
+type RankHistogram struct {
+	Rank1   int `json:"rank_1"`
+	Rank2_3 int `json:"rank_2_3"`
+	Rank4_K int `json:"rank_4_k"`
+	Miss    int `json:"miss"`
+}
+
+// TypeSummary is a slimmer per-type rollup. Latency and similarity are
+// excluded because per-type bucket sizes are too small to be informative.
+type TypeSummary struct {
+	N         int     `json:"queries"`
+	HitRate   float64 `json:"hit_rate"`
+	MRR       float64 `json:"mrr"`
+	Precision float64 `json:"precision"`
+	Recall    float64 `json:"recall"`
 }
 
 // Embedder is the minimal interface needed to embed query text. Same shape
@@ -312,6 +343,7 @@ func Run(
 		}
 		qr := QueryResult{
 			ID:              q.ID,
+			Type:            q.Type,
 			Query:           q.Query,
 			ExpectedSources: q.ExpectedSources,
 		}
@@ -383,6 +415,15 @@ func aggregate(results []QueryResult) Summary {
 	successful := 0
 	latencies := make([]int64, 0, len(results))
 	scores := make([]float64, 0, len(results))
+
+	// Per-type accumulators. Untyped queries are excluded from PerType.
+	type perTypeAcc struct {
+		n         int
+		hits      int
+		mrr, p, r float64
+	}
+	buckets := map[string]*perTypeAcc{}
+
 	for _, q := range results {
 		if q.Error != "" {
 			continue
@@ -396,6 +437,32 @@ func aggregate(results []QueryResult) Summary {
 		s.Recall += q.RecallAtK
 		latencies = append(latencies, q.LatencyMS)
 		scores = append(scores, q.TopScore)
+
+		switch rank := rankFromRR(q.ReciprocalRank); {
+		case rank == 0:
+			s.RankDistribution.Miss++
+		case rank == 1:
+			s.RankDistribution.Rank1++
+		case rank <= 3:
+			s.RankDistribution.Rank2_3++
+		default:
+			s.RankDistribution.Rank4_K++
+		}
+
+		if q.Type != "" {
+			b, ok := buckets[q.Type]
+			if !ok {
+				b = &perTypeAcc{}
+				buckets[q.Type] = b
+			}
+			b.n++
+			if q.HitAtK {
+				b.hits++
+			}
+			b.mrr += q.ReciprocalRank
+			b.p += q.PrecisionAtK
+			b.r += q.RecallAtK
+		}
 	}
 	if successful == 0 {
 		return Summary{}
@@ -405,12 +472,41 @@ func aggregate(results []QueryResult) Summary {
 	s.MRR /= n
 	s.Precision /= n
 	s.Recall /= n
-	s.MedianLatencyMS = medianInt64(latencies)
+	s.MedianLatencyMS = percentileInt64(latencies, 50)
+	s.P95LatencyMS = percentileInt64(latencies, 95)
 	s.MinSimilarity, s.MedianSimilarity, s.MaxSimilarity = minMedianMax(scores)
+
+	if len(buckets) > 0 {
+		s.PerType = make(map[string]TypeSummary, len(buckets))
+		for t, b := range buckets {
+			bn := float64(b.n)
+			s.PerType[t] = TypeSummary{
+				N:         b.n,
+				HitRate:   float64(b.hits) / bn,
+				MRR:       b.mrr / bn,
+				Precision: b.p / bn,
+				Recall:    b.r / bn,
+			}
+		}
+	}
 	return s
 }
 
-func medianInt64(xs []int64) float64 {
+// rankFromRR recovers the integer rank of the first hit from a reciprocal
+// rank score. A zero RR is a miss; otherwise rank = round(1/rr).
+func rankFromRR(rr float64) int {
+	if rr <= 0 {
+		return 0
+	}
+	// rr = 1/rank exactly for ranks 1..K; rounding is defensive in case of
+	// future fractional inputs (e.g. tied-rank schemes).
+	return int(1.0/rr + 0.5)
+}
+
+// percentileInt64 returns the p-th percentile of xs using nearest-rank.
+// p is in [0, 100]. Empty input returns 0. Even-count medians (p=50) are
+// linearly interpolated between the two middle values.
+func percentileInt64(xs []int64, p float64) float64 {
 	if len(xs) == 0 {
 		return 0
 	}
@@ -418,11 +514,22 @@ func medianInt64(xs []int64) float64 {
 	copy(sorted, xs)
 	slices.Sort(sorted)
 	n := len(sorted)
-	if n%2 == 1 {
-		return float64(sorted[n/2])
+	if p == 50 && n%2 == 0 {
+		return float64(sorted[n/2-1]+sorted[n/2]) / 2
 	}
-	return float64(sorted[n/2-1]+sorted[n/2]) / 2
+	idx := int((p/100)*float64(n) + 0.5)
+	if idx < 1 {
+		idx = 1
+	}
+	if idx > n {
+		idx = n
+	}
+	return float64(sorted[idx-1])
 }
+
+// medianInt64 is kept as a thin wrapper over percentileInt64 for the
+// existing test surface.
+func medianInt64(xs []int64) float64 { return percentileInt64(xs, 50) }
 
 func minMedianMax(xs []float64) (mn, med, mx float64) {
 	if len(xs) == 0 {

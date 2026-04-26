@@ -134,7 +134,7 @@ func TestRun_ContextCancelPartial(t *testing.T) {
 	if !rep.Partial {
 		t.Fatalf("Partial should be true on cancel")
 	}
-	if rep.Summary != (Summary{}) {
+	if !isZeroSummary(rep.Summary) {
 		t.Fatalf("Summary should be zero on partial, got %+v", rep.Summary)
 	}
 }
@@ -339,6 +339,97 @@ func TestBuildHermetic_FreshNoWorkDir(t *testing.T) {
 		t.Fatalf("fresh build without WorkDir: %v", err)
 	}
 	setup.Cleanup()
+}
+
+func isZeroSummary(s Summary) bool {
+	return s.HitRate == 0 && s.MRR == 0 && s.Precision == 0 && s.Recall == 0 &&
+		s.MedianLatencyMS == 0 && s.P95LatencyMS == 0 &&
+		s.MinSimilarity == 0 && s.MedianSimilarity == 0 && s.MaxSimilarity == 0 &&
+		s.RankDistribution == (RankHistogram{}) && len(s.PerType) == 0
+}
+
+func TestAggregate_PerTypeAndRankHistogram(t *testing.T) {
+	dataset := []GoldenQuery{
+		{ID: "d1", Type: TypeDirect, Query: "alpha", ExpectedSources: []string{"a.md"}},
+		{ID: "d2", Type: TypeDirect, Query: "beta", ExpectedSources: []string{"b.md"}},
+		{ID: "m1", Type: TypeMultiDoc, Query: "gamma", ExpectedSources: []string{"a.md", "b.md"}},
+		{ID: "x1", Type: TypeAdversarial, Query: "delta", ExpectedSources: []string{"a.md"}},
+	}
+	p := &fakePipeline{results: map[string][]vectorstore.Result{
+		// d1: rank-1 hit
+		"alpha": {{Source: "a.md", Score: 0.9}},
+		// d2: rank-2 hit (one wrong source first)
+		"beta": {{Source: "z.md", Score: 0.7}, {Source: "b.md", Score: 0.6}},
+		// m1: rank-1 hit, recall=1
+		"gamma": {{Source: "a.md", Score: 0.8}, {Source: "b.md", Score: 0.7}},
+		// x1: miss
+		"delta": {{Source: "z.md", Score: 0.5}},
+	}}
+	rep, err := Run(context.Background(), p, []string{"a.md", "b.md", "z.md"}, dataset, 5)
+	if err != nil {
+		t.Fatalf("unexpected: %v", err)
+	}
+
+	rd := rep.Summary.RankDistribution
+	if rd.Rank1 != 2 {
+		t.Errorf("Rank1: got %d want 2", rd.Rank1)
+	}
+	if rd.Rank2_3 != 1 {
+		t.Errorf("Rank2_3: got %d want 1", rd.Rank2_3)
+	}
+	if rd.Miss != 1 {
+		t.Errorf("Miss: got %d want 1", rd.Miss)
+	}
+	if rd.Rank4_K != 0 {
+		t.Errorf("Rank4_K: got %d want 0", rd.Rank4_K)
+	}
+
+	if len(rep.Summary.PerType) != 3 {
+		t.Fatalf("PerType: expected 3 buckets, got %v", rep.Summary.PerType)
+	}
+	direct := rep.Summary.PerType[TypeDirect]
+	if direct.N != 2 || direct.HitRate != 1.0 {
+		t.Errorf("direct bucket wrong: %+v", direct)
+	}
+	adv := rep.Summary.PerType[TypeAdversarial]
+	if adv.N != 1 || adv.HitRate != 0 {
+		t.Errorf("adversarial bucket wrong: %+v", adv)
+	}
+	multi := rep.Summary.PerType[TypeMultiDoc]
+	if multi.N != 1 || multi.Recall != 1.0 {
+		t.Errorf("multi-doc bucket wrong: %+v", multi)
+	}
+}
+
+func TestPercentileInt64(t *testing.T) {
+	xs := []int64{10, 20, 30, 40, 50, 60, 70, 80, 90, 100}
+	if got := percentileInt64(xs, 95); got != 100 {
+		t.Errorf("p95: got %v want 100", got)
+	}
+	if got := percentileInt64(xs, 50); got != 55 {
+		t.Errorf("p50 (even): got %v want 55", got)
+	}
+	if got := percentileInt64(nil, 95); got != 0 {
+		t.Errorf("p95 of empty: got %v want 0", got)
+	}
+}
+
+func TestRankFromRR(t *testing.T) {
+	cases := []struct {
+		rr   float64
+		want int
+	}{
+		{0, 0},
+		{1.0, 1},
+		{0.5, 2},
+		{1.0 / 3, 3},
+		{0.1, 10},
+	}
+	for _, tc := range cases {
+		if got := rankFromRR(tc.rr); got != tc.want {
+			t.Errorf("rankFromRR(%v) = %d, want %d", tc.rr, got, tc.want)
+		}
+	}
 }
 
 func TestMedianInt64(t *testing.T) {
