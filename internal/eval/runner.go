@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rs/zerolog/log"
+
 	"github.com/DanielBlei/go-to-rag/internal/ingest"
 	"github.com/DanielBlei/go-to-rag/internal/rag"
 	"github.com/DanielBlei/go-to-rag/internal/vectorstore"
@@ -112,8 +114,8 @@ type HermeticMeta struct {
 // A mismatch means the embedding configuration changed and the cache must be rebuilt.
 // WorkDir is required when Reuse is true. Cleanup closes the store but leaves  the cache on disk.
 //
-// When Reuse is false (default), BuildHermetic creates a tmp directory (under WorkDir  if set, otherwise under the OS temp dir),
-// ingests into it, and Cleanup removes the tmp dir entirely. WorkDir is optional and not created.
+// When Reuse is false (default), BuildHermetic creates a tmp directory (under WorkDir if set, otherwise under the OS temp dir),
+// ingests into it, and Cleanup removes the tmp dir entirely. WorkDir is optional; if set, it is created if it does not exist.
 type HermeticOptions struct {
 	CorpusDir string
 	ChunkSize int
@@ -147,6 +149,12 @@ func buildFresh(ctx context.Context, embedder Embedder, opts HermeticOptions) (*
 	// opts.WorkDir is optional: if set, the tmp dir lands there (useful for
 	// tests that need to inspect it); if empty, the OS temp dir is used so the
 	// run leaves no footprint in the project directory.
+	if opts.WorkDir != "" {
+		log.Debug().Str("work_dir", opts.WorkDir).Msg("ensuring work dir")
+		if err := os.MkdirAll(opts.WorkDir, 0o755); err != nil {
+			return nil, fmt.Errorf("eval: prepare work dir %q: %w", opts.WorkDir, err)
+		}
+	}
 	tmpDir, err := os.MkdirTemp(opts.WorkDir, "go-to-rag-eval-*")
 	if err != nil {
 		return nil, fmt.Errorf("eval: mkdir tmp: %w", err)
@@ -161,11 +169,13 @@ func buildFresh(ctx context.Context, embedder Embedder, opts HermeticOptions) (*
 		_ = store.Close()
 		_ = os.RemoveAll(tmpDir)
 	}
+	log.Info().Str("corpus", opts.CorpusDir).Msg("embedding corpus")
 	sources, err := ingestCorpus(ctx, store, embedder, opts)
 	if err != nil {
 		cleanup()
 		return nil, fmt.Errorf("eval: ingest corpus: %w", err)
 	}
+	log.Info().Int("sources", len(sources)).Msg("embedding complete")
 	return &HermeticSetup{
 		Pipeline: rag.NewPipeline(embedder, store),
 		Sources:  sources,
@@ -195,7 +205,7 @@ func buildReuse(ctx context.Context, embedder Embedder, opts HermeticOptions) (*
 		sources, err := listSources(opts.CorpusDir)
 		if err != nil {
 			_ = store.Close()
-			return nil, err
+			return nil, fmt.Errorf("eval: list corpus sources: %w", err)
 		}
 		return &HermeticSetup{
 			Pipeline: rag.NewPipeline(embedder, store),
@@ -208,12 +218,14 @@ func buildReuse(ctx context.Context, embedder Embedder, opts HermeticOptions) (*
 	if err != nil {
 		return nil, fmt.Errorf("eval: open cache %q: %w", dbPath, err)
 	}
+	log.Info().Str("corpus", opts.CorpusDir).Msg("embedding corpus")
 	sources, err := ingestCorpus(ctx, store, embedder, opts)
 	if err != nil {
 		_ = store.Close()
 		_ = os.Remove(dbPath)
 		return nil, fmt.Errorf("eval: ingest corpus into cache: %w", err)
 	}
+	log.Info().Int("sources", len(sources)).Msg("embedding complete")
 	if err := writeMeta(metaPath, opts.Meta); err != nil {
 		_ = store.Close()
 		_ = os.Remove(dbPath)

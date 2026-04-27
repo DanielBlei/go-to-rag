@@ -341,6 +341,27 @@ func TestBuildHermetic_FreshNoWorkDir(t *testing.T) {
 	setup.Cleanup()
 }
 
+func TestBuildHermetic_FreshCreatesWorkDir(t *testing.T) {
+	corpus := t.TempDir()
+	if err := os.WriteFile(filepath.Join(corpus, "a.md"), []byte("hi"), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	// Use a nested path that does not exist so MkdirAll is actually exercised.
+	workDir := filepath.Join(t.TempDir(), "nested", "does-not-exist")
+	setup, err := BuildHermetic(context.Background(), detEmbedder{}, HermeticOptions{
+		CorpusDir: corpus,
+		ChunkSize: 64,
+		WorkDir:   workDir,
+	})
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	defer setup.Cleanup()
+	if _, err := os.Stat(workDir); err != nil {
+		t.Fatalf("work dir was not created: %v", err)
+	}
+}
+
 func isZeroSummary(s Summary) bool {
 	return s.HitRate == 0 && s.MRR == 0 && s.Precision == 0 && s.Recall == 0 &&
 		s.MedianLatencyMS == 0 && s.P95LatencyMS == 0 &&

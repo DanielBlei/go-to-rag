@@ -20,7 +20,7 @@ Use the metric deltas to guide decisions on chunk size, overlap, embedding model
 | `--chunk-size`  | `512`                                    | Chunk size in characters                                         |
 | `--overlap`     | `100`                                    | Overlap between adjacent chunks                                  |
 | `--reuse-db`    | `false`                                  | Persist the embedded corpus to `<work-dir>/run.db` and reuse it  |
-| `--work-dir`    | `./.eval-cache`                          | Directory for ephemeral build dirs and the optional reuse cache  |
+| `--work-dir`    | `./.eval-cache`                          | Directory for ephemeral build dirs and the optional reuse cache; created if absent |
 | `--host`        | `http://localhost:11434`                 | Ollama host URL                                                  |
 | `--embed-model` | `mxbai-embed-large:latest`               | Ollama embedding model                                           |
 

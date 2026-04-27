@@ -15,7 +15,7 @@ endif
 
 .PHONY: help build test test-v test-cover cover lint lint-fix fmt tidy \
 	clean run-demo run-seed run-ingest model-create model-delete \
-	docker-build docker-demo docker-clean proto
+	docker-build docker-demo docker-clean proto eval
 
 help: ## Display this help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} \
@@ -44,6 +44,10 @@ model-create: ## Create/update the custom Ollama RAG model from $(MODELFILE)
 
 model-delete: ## Remove the custom Ollama RAG model (ignore if not present)
 	@ollama rm $(MODEL_NAME) 2>/dev/null || true
+
+eval: build ## Run retrieval eval suite and print text report
+	@echo -e "\nTip: run './bin/$(BINARY) eval --help' to see all options (output format, top-k, chunk size, reuse cache, etc)\n"
+	./bin/$(BINARY) eval --format text
 
 ##@ Testing
 

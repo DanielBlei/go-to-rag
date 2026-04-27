@@ -92,7 +92,7 @@ For any CLI command, pass `--model` directly instead. See [Quickstart](#quicksta
 
 `eval` measures retrieval quality before you rely on the pipeline. It runs assertion-based metrics against a frozen corpus and a golden query set: no judge, no external calls beyond the embedding model, and the same inputs always produce the same numbers. Use it to validate changes to chunk size, overlap, or embedding model before committing them.
 
-An LLM Judge tier for correctness and faithfulness scoring is planned once the assertion baseline is stable. See [docs/eval.md](docs/eval.md) for usage, metrics, and the full methodology.
+Run `make eval` for a zero-config text report using the bundled corpus and golden set. An LLM Judge tier for correctness and faithfulness scoring is planned once the assertion baseline is stable. See [docs/eval.md](docs/eval.md) for usage, metrics, and the full methodology.
 
 ## Docker
 
