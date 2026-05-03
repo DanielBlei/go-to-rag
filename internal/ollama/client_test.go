@@ -65,7 +65,7 @@ func TestNew(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c, err := New(tt.host, tt.embedModel, tt.chatModel)
+			c, err := New(tt.host, tt.embedModel, tt.chatModel, "")
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("New() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -161,7 +161,7 @@ func TestValidate(t *testing.T) {
 				host = srv.URL
 			}
 
-			c, err := New(host, testEmbedModel, testChatModel)
+			c, err := New(host, testEmbedModel, testChatModel, "")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -270,7 +270,7 @@ func TestChat(t *testing.T) {
 			srv := newTestChatServer(t)
 			defer srv.Close()
 
-			c, err := New(srv.URL, testEmbedModel, tt.model)
+			c, err := New(srv.URL, testEmbedModel, tt.model, "")
 			if err != nil {
 				t.Fatalf("New: %v", err)
 			}
