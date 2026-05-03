@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
@@ -15,13 +17,14 @@ import (
 )
 
 var (
-	host             string
-	embedModel       string
-	dbPath           string
-	debug            bool
-	log              zerolog.Logger
-	inferenceBackend = "ollama"
-	apiKey           string
+	host              = defaultHost
+	embedHost         string
+	embedModel        string
+	dbPath            string
+	debug             bool
+	log               zerolog.Logger
+	inferenceProvider = "ollama"
+	apiKey            string
 )
 
 // inferenceFlag implements pflag.Value for the --inference enum.
@@ -37,6 +40,33 @@ func (f *inferenceFlag) Set(s string) error {
 	default:
 		return fmt.Errorf("invalid --inference value %q, must be ollama or vllm", s)
 	}
+}
+
+// hostFlag implements pflag.Value for URL flags.
+// Validates that the value is a well-formed http/https URL; for bare IP addresses
+// (no hostname) an explicit port is required. An empty value is accepted — it
+// means "default to --host" (used by --embed-host).
+type hostFlag struct{ val *string }
+
+func (f *hostFlag) String() string { return *f.val }
+func (f *hostFlag) Type() string   { return "url" }
+func (f *hostFlag) Set(s string) error {
+	if s == "" {
+		*f.val = s
+		return nil
+	}
+	u, err := url.Parse(s)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return fmt.Errorf("%q must be a full URL with scheme and host (e.g. http://localhost:8000)", s)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("%q: scheme must be http or https", s)
+	}
+	if net.ParseIP(u.Hostname()) != nil && u.Port() == "" {
+		return fmt.Errorf("%q: bare IP address requires an explicit port (e.g. http://%s:8000)", s, u.Hostname())
+	}
+	*f.val = s
+	return nil
 }
 
 const (
@@ -87,10 +117,12 @@ func withSignalCancel(parent context.Context) (context.Context, context.CancelFu
 // addRAGFlags registers flags shared by commands that talk to the inference backend and vector store.
 // todo: move to persistent flags; when calling Execute() more than once, e.g. integration tests, there is a stale state risk.
 func addRAGFlags(cmd *cobra.Command) {
-	cmd.Flags().StringVar(&host, "host", defaultHost, "inference backend host URL")
+	cmd.Flags().Var(&hostFlag{val: &host}, "host", "URL for the chat/inference server")
+	cmd.Flags().
+		Var(&hostFlag{val: &embedHost}, "embed-host", "URL for the embedding server; defaults to --host when empty")
 	cmd.Flags().StringVar(&embedModel, "embed-model", defaultEmbedModel, "embedding model name")
 	cmd.Flags().StringVar(&dbPath, "db", defaultDBPath, "path to the vector store database")
-	cmd.Flags().Var(&inferenceFlag{val: &inferenceBackend}, "inference", "inference backend: ollama or vllm")
+	cmd.Flags().Var(&inferenceFlag{val: &inferenceProvider}, "inference", "inference provider: ollama or vllm")
 	cmd.Flags().StringVar(&apiKey, "api-key", "", "bearer token for backend auth (vLLM production, Ollama cloud)")
 }
 

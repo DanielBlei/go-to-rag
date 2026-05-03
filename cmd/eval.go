@@ -82,7 +82,13 @@ func runEval(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("hash corpus: %w", err)
 	}
 
-	embedder, _, err := inference.Resolve(ctx, evalInference, evalHost, evalEmbedModel, "", evalApiKey, true, false)
+	embedder, _, err := inference.Resolve(ctx, inference.ResolveConfig{
+		Provider:   evalInference,
+		Host:       evalHost,
+		EmbedModel: evalEmbedModel,
+		APIKey:     evalApiKey,
+		CheckEmbed: true,
+	})
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
 			return fmt.Errorf("inference backend timed out, is it overloaded")

@@ -46,9 +46,16 @@ func runMCP(cmd *cobra.Command, _ []string) error {
 	defer func() { _ = store.Close() }()
 
 	checkChat := mcpChatModel != ""
-	embedder, chatServer, err := inference.Resolve(
-		cmd.Context(), inferenceBackend, host, embedModel, mcpChatModel, apiKey, true, checkChat,
-	)
+	embedder, chatServer, err := inference.Resolve(cmd.Context(), inference.ResolveConfig{
+		Provider:   inferenceProvider,
+		Host:       host,
+		EmbedHost:  embedHost,
+		EmbedModel: embedModel,
+		ChatModel:  mcpChatModel,
+		APIKey:     apiKey,
+		CheckEmbed: true,
+		CheckChat:  checkChat,
+	})
 	if err != nil {
 		return err
 	}

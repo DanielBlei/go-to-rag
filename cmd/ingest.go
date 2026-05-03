@@ -48,9 +48,14 @@ func runIngest(cmd *cobra.Command, args []string) error {
 		ingestPath = args[0]
 	}
 
-	embedder, _, err := inference.Resolve(
-		cmd.Context(), inferenceBackend, host, embedModel, "", apiKey, true, false,
-	)
+	embedder, _, err := inference.Resolve(cmd.Context(), inference.ResolveConfig{
+		Provider:   inferenceProvider,
+		Host:       host,
+		EmbedHost:  embedHost,
+		EmbedModel: embedModel,
+		APIKey:     apiKey,
+		CheckEmbed: true,
+	})
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
 			return fmt.Errorf("inference backend timed out, is it overloaded")

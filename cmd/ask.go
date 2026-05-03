@@ -77,8 +77,9 @@ func runAsk(cmd *cobra.Command, args []string) error {
 	prompt := args[0]
 
 	log.Debug().Str("model", chatModel).Str("embed-model", embedModel).
-		Str("host", host).Str("inference", inferenceBackend).Str("db", dbPath).Int("top-k", topK).
-		Bool("with-fallback", withFallback).Int("think", int(thinkMode)).Msg("initializing ask")
+		Str("host", host).Str("inference", inferenceProvider).Str("embed-host", embedHost).
+		Str("db", dbPath).Int("top-k", topK).Bool("with-fallback", withFallback).
+		Int("think", int(thinkMode)).Msg("initializing ask")
 
 	store, storeErr := openStore(cmd.Context(), dbPath)
 	if storeErr != nil {
@@ -88,10 +89,16 @@ func runAsk(cmd *cobra.Command, args []string) error {
 	}
 
 	checkEmbed := store != nil
-	embedder, chatServer, err := inference.Resolve(
-		cmd.Context(), inferenceBackend, host, embedModel, chatModel, apiKey,
-		checkEmbed, true,
-	)
+	embedder, chatServer, err := inference.Resolve(cmd.Context(), inference.ResolveConfig{
+		Provider:   inferenceProvider,
+		Host:       host,
+		EmbedHost:  embedHost,
+		EmbedModel: embedModel,
+		ChatModel:  chatModel,
+		APIKey:     apiKey,
+		CheckEmbed: checkEmbed,
+		CheckChat:  true,
+	})
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
 			return fmt.Errorf("inference backend timed out, is it overloaded")

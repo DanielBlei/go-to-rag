@@ -45,9 +45,16 @@ func runServe(cmd *cobra.Command, _ []string) error {
 	}
 	defer func() { _ = store.Close() }()
 
-	embedder, chatServer, err := inference.Resolve(
-		cmd.Context(), inferenceBackend, host, embedModel, serveModel, apiKey, true, true,
-	)
+	embedder, chatServer, err := inference.Resolve(cmd.Context(), inference.ResolveConfig{
+		Provider:   inferenceProvider,
+		Host:       host,
+		EmbedHost:  embedHost,
+		EmbedModel: embedModel,
+		ChatModel:  serveModel,
+		APIKey:     apiKey,
+		CheckEmbed: true,
+		CheckChat:  true,
+	})
 	if err != nil {
 		return err
 	}

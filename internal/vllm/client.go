@@ -23,6 +23,7 @@ const chatTimeout = 3 * time.Minute
 // It implements rag.Embedder and rag.ChatServer using stdlib only.
 type Client struct {
 	host        string
+	embedHost   string
 	embedModel  string
 	chatModel   string
 	httpClient  *http.Client
@@ -33,12 +34,20 @@ type Client struct {
 // New creates a Client connected to the given host. apiKey is optional.
 // Unlike the Ollama client, model names are not required to have a tag (e.g.
 // "meta-llama/Llama-3.1-8B-Instruct" is a valid vLLM model ID).
-func New(host, embedModel, chatModel, apiKey string) (*Client, error) {
+func New(host, embedHost, embedModel, chatModel, apiKey string) (*Client, error) {
 	if _, err := url.Parse(host); err != nil {
 		return nil, fmt.Errorf("invalid host %q: %w", host, err)
 	}
+	if embedHost != "" {
+		if _, err := url.Parse(embedHost); err != nil {
+			return nil, fmt.Errorf("invalid embed-host %q: %w", embedHost, err)
+		}
+	} else {
+		embedHost = host
+	}
 	return &Client{
 		host:       strings.TrimRight(host, "/"),
+		embedHost:  strings.TrimRight(embedHost, "/"),
 		embedModel: embedModel,
 		chatModel:  chatModel,
 		httpClient: &http.Client{
@@ -47,54 +56,74 @@ func New(host, embedModel, chatModel, apiKey string) (*Client, error) {
 	}, nil
 }
 
-// Validate confirms that the vLLM server is reachable and the required models
+// Validate confirms that the vLLM server(s) are reachable and the required models
 // are loaded. The check is idempotent — subsequent calls return the cached result.
+// Embed and chat models are validated against their respective hosts independently,
+// supporting deployments where each model runs on a separate vLLM process.
+//
+// Note: sync.Once fires on the first call. checkEmbed/checkChat flags on subsequent
+// calls are silently ignored. This is safe for the current CLI usage model where
+// Resolve() creates a new Client per invocation and calls Validate() exactly once.
 func (c *Client) Validate(ctx context.Context, checkEmbed, checkChat bool) error {
 	c.once.Do(func() {
 		validateCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
 
-		req, err := http.NewRequestWithContext(validateCtx, http.MethodGet, c.host+"/v1/models", nil)
-		if err != nil {
-			c.validateErr = fmt.Errorf("build models request: %w", err)
-			return
-		}
-		resp, err := c.httpClient.Do(req)
-		if err != nil {
-			c.validateErr = fmt.Errorf("connect to vLLM: %w", err)
-			return
-		}
-		defer func() { _ = resp.Body.Close() }()
-
-		if resp.StatusCode != http.StatusOK {
-			c.validateErr = fmt.Errorf("vLLM /v1/models returned %d", resp.StatusCode)
-			return
+		if checkEmbed && c.embedModel != "" {
+			loaded, err := c.loadedModels(validateCtx, c.embedHost)
+			if err != nil {
+				c.validateErr = err
+				return
+			}
+			if !loaded[c.embedModel] {
+				c.validateErr = fmt.Errorf("model %q not found in vLLM at %s", c.embedModel, c.embedHost)
+				return
+			}
 		}
 
-		var modelsResp struct {
-			Data []struct {
-				ID string `json:"id"`
-			} `json:"data"`
-		}
-		if err := json.NewDecoder(resp.Body).Decode(&modelsResp); err != nil {
-			c.validateErr = fmt.Errorf("decode models response: %w", err)
-			return
-		}
-
-		loaded := make(map[string]bool, len(modelsResp.Data))
-		for _, m := range modelsResp.Data {
-			loaded[m.ID] = true
-		}
-
-		if checkEmbed && c.embedModel != "" && !loaded[c.embedModel] {
-			c.validateErr = fmt.Errorf("model %q not found in vLLM", c.embedModel)
-			return
-		}
-		if checkChat && c.chatModel != "" && !loaded[c.chatModel] {
-			c.validateErr = fmt.Errorf("model %q not found in vLLM", c.chatModel)
+		if checkChat && c.chatModel != "" {
+			loaded, err := c.loadedModels(validateCtx, c.host)
+			if err != nil {
+				c.validateErr = err
+				return
+			}
+			if !loaded[c.chatModel] {
+				c.validateErr = fmt.Errorf("model %q not found in vLLM at %s", c.chatModel, c.host)
+			}
 		}
 	})
 	return c.validateErr
+}
+
+func (c *Client) loadedModels(ctx context.Context, baseURL string) (map[string]bool, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/v1/models", nil)
+	if err != nil {
+		return nil, fmt.Errorf("build models request: %w", err)
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("connect to vLLM: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("vLLM /v1/models returned %d", resp.StatusCode)
+	}
+
+	var modelsResp struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&modelsResp); err != nil {
+		return nil, fmt.Errorf("decode models response: %w", err)
+	}
+
+	loaded := make(map[string]bool, len(modelsResp.Data))
+	for _, m := range modelsResp.Data {
+		loaded[m.ID] = true
+	}
+	return loaded, nil
 }
 
 // Embed returns the embedding vector for the given text using /v1/embeddings.
@@ -110,7 +139,7 @@ func (c *Client) Embed(ctx context.Context, text string) ([]float32, error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.host+"/v1/embeddings",
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.embedHost+"/v1/embeddings",
 		bytes.NewReader(reqBody))
 	if err != nil {
 		return nil, fmt.Errorf("build embed request: %w", err)
