@@ -30,11 +30,21 @@ func TestNew(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := New(tt.host, testEmbedModel, testChatModel, "")
+			_, err := New(tt.host, "", testEmbedModel, testChatModel, "")
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("New() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+func TestNew_InvalidEmbedHost(t *testing.T) {
+	_, err := New("http://localhost:8000", "://bad-embed-host", testEmbedModel, testChatModel, "")
+	if err == nil {
+		t.Fatal("expected error for invalid embed-host URL")
+	}
+	if !strings.Contains(err.Error(), "embed-host") {
+		t.Errorf("error should mention 'embed-host', got: %v", err)
 	}
 }
 
@@ -117,7 +127,7 @@ func TestValidate(t *testing.T) {
 				targetHost = srv.URL
 			}
 
-			c, err := New(targetHost, testEmbedModel, testChatModel, "")
+			c, err := New(targetHost, "", testEmbedModel, testChatModel, "")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -144,7 +154,7 @@ func TestValidate_OnceGuard(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c, _ := New(srv.URL, testEmbedModel, testChatModel, "")
+	c, _ := New(srv.URL, "", testEmbedModel, testChatModel, "")
 	ctx := context.Background()
 	_ = c.Validate(ctx, true, true)
 	_ = c.Validate(ctx, true, true)
@@ -152,6 +162,68 @@ func TestValidate_OnceGuard(t *testing.T) {
 	if calls != 1 {
 		t.Errorf("Validate called server %d times, want 1 (sync.Once guard)", calls)
 	}
+}
+
+func TestValidate_DualEndpoint(t *testing.T) {
+	embedSrv := newModelsServer(t, []string{testEmbedModel})
+	chatSrv := newModelsServer(t, []string{testChatModel})
+	defer embedSrv.Close()
+	defer chatSrv.Close()
+
+	t.Run("both servers up", func(t *testing.T) {
+		c, err := New(chatSrv.URL, embedSrv.URL, testEmbedModel, testChatModel, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		if err := c.Validate(ctx, true, true); err != nil {
+			t.Fatalf("Validate() unexpected error: %v", err)
+		}
+	})
+
+	t.Run("embed server unreachable", func(t *testing.T) {
+		c, err := New(chatSrv.URL, "http://127.0.0.1:1", testEmbedModel, testChatModel, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		err = c.Validate(ctx, true, true)
+		if err == nil {
+			t.Fatal("expected error for unreachable embed server")
+		}
+	})
+
+	t.Run("chat server unreachable", func(t *testing.T) {
+		c, err := New("http://127.0.0.1:1", embedSrv.URL, testEmbedModel, testChatModel, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		if err = c.Validate(ctx, true, true); err == nil {
+			t.Fatal("expected error for unreachable chat server")
+		}
+	})
+
+	t.Run("chat model not found", func(t *testing.T) {
+		emptyChatSrv := newModelsServer(t, []string{})
+		defer emptyChatSrv.Close()
+		c, err := New(emptyChatSrv.URL, embedSrv.URL, testEmbedModel, testChatModel, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		err = c.Validate(ctx, true, true)
+		if err == nil {
+			t.Fatal("expected error when chat model missing")
+		}
+		if !strings.Contains(err.Error(), testChatModel) {
+			t.Errorf("error should mention chat model %q, got: %v", testChatModel, err)
+		}
+	})
 }
 
 func newEmbedServer(t *testing.T, embedding []float32) *httptest.Server {
@@ -177,7 +249,7 @@ func TestEmbed(t *testing.T) {
 	srv := newEmbedServer(t, want)
 	defer srv.Close()
 
-	c, _ := New(srv.URL, testEmbedModel, "", "")
+	c, _ := New(srv.URL, "", testEmbedModel, "", "")
 	got, err := c.Embed(context.Background(), "hello")
 	if err != nil {
 		t.Fatalf("Embed() error = %v", err)
@@ -271,7 +343,7 @@ func TestChat(t *testing.T) {
 			srv := newChatServer(t)
 			defer srv.Close()
 
-			c, _ := New(srv.URL, testEmbedModel, testChatModel, "")
+			c, _ := New(srv.URL, "", testEmbedModel, testChatModel, "")
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
 
@@ -298,7 +370,7 @@ func TestChat_PlainWriter(t *testing.T) {
 	srv := newChatServer(t)
 	defer srv.Close()
 
-	c, _ := New(srv.URL, testEmbedModel, testChatModel, "")
+	c, _ := New(srv.URL, "", testEmbedModel, testChatModel, "")
 	var buf strings.Builder
 	err := c.Chat(context.Background(), "", "", "q", rag.ChatOptions{ThinkMode: rag.ThinkAuto}, &buf)
 	if err != nil {
@@ -322,7 +394,7 @@ func TestChat_APIKey(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c, _ := New(srv.URL, testEmbedModel, testChatModel, wantKey)
+	c, _ := New(srv.URL, "", testEmbedModel, testChatModel, wantKey)
 	_ = c.Chat(context.Background(), "", "", "q", rag.ChatOptions{}, &strings.Builder{})
 
 	if gotKey != wantKey {

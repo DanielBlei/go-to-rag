@@ -33,10 +33,16 @@ type Client struct {
 
 // New creates a Client connected to the given host using the specified models.
 // apiKey is optional; when non-empty it is sent as a Bearer token on every request.
-func New(host, embedModel, chatModel, apiKey string) (*Client, error) {
+// embedHost is accepted for API consistency with the vLLM client but ignored —
+// Ollama serves all models from a single endpoint.
+func New(host, embedHost, embedModel, chatModel, apiKey string) (*Client, error) {
 	u, err := url.Parse(host)
 	if err != nil {
 		return nil, fmt.Errorf("invalid host %q: %w", host, err)
+	}
+	if embedHost != "" && embedHost != host {
+		log.Warn().Str("embed-host", embedHost).
+			Msg("--embed-host is ignored for ollama; all models are served from --host")
 	}
 	for _, m := range []string{embedModel, chatModel} {
 		if m != "" && !strings.Contains(m, ":") {

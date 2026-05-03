@@ -71,7 +71,7 @@ func ctx2s(t *testing.T) context.Context {
 }
 
 func TestResolve_UnknownProvider(t *testing.T) {
-	_, _, err := Resolve(context.Background(), "foobar", "http://localhost", "", "", "", false, false)
+	_, _, err := Resolve(context.Background(), ResolveConfig{Provider: "foobar", Host: "http://localhost"})
 	if err == nil {
 		t.Fatal("expected error for unknown provider")
 	}
@@ -84,7 +84,14 @@ func TestResolve_vLLM_BothModels(t *testing.T) {
 	srv := newVLLMModelsServer(t, []string{vllmEmbedModel, vllmChatModel})
 	defer srv.Close()
 
-	embedder, chat, err := Resolve(ctx2s(t), "vllm", srv.URL, vllmEmbedModel, vllmChatModel, "", true, true)
+	embedder, chat, err := Resolve(ctx2s(t), ResolveConfig{
+		Provider:   "vllm",
+		Host:       srv.URL,
+		EmbedModel: vllmEmbedModel,
+		ChatModel:  vllmChatModel,
+		CheckEmbed: true,
+		CheckChat:  true,
+	})
 	if err != nil {
 		t.Fatalf("Resolve() error = %v", err)
 	}
@@ -100,7 +107,12 @@ func TestResolve_vLLM_EmbedOnly(t *testing.T) {
 	srv := newVLLMModelsServer(t, []string{vllmEmbedModel})
 	defer srv.Close()
 
-	embedder, chat, err := Resolve(ctx2s(t), "vllm", srv.URL, vllmEmbedModel, "", "", true, false)
+	embedder, chat, err := Resolve(ctx2s(t), ResolveConfig{
+		Provider:   "vllm",
+		Host:       srv.URL,
+		EmbedModel: vllmEmbedModel,
+		CheckEmbed: true,
+	})
 	if err != nil {
 		t.Fatalf("Resolve() error = %v", err)
 	}
@@ -113,7 +125,14 @@ func TestResolve_vLLM_EmbedOnly(t *testing.T) {
 }
 
 func TestResolve_vLLM_Unreachable(t *testing.T) {
-	_, _, err := Resolve(ctx2s(t), "vllm", "http://127.0.0.1:1", vllmEmbedModel, vllmChatModel, "", true, true)
+	_, _, err := Resolve(ctx2s(t), ResolveConfig{
+		Provider:   "vllm",
+		Host:       "http://127.0.0.1:1",
+		EmbedModel: vllmEmbedModel,
+		ChatModel:  vllmChatModel,
+		CheckEmbed: true,
+		CheckChat:  true,
+	})
 	if err == nil {
 		t.Fatal("expected error for unreachable host")
 	}
@@ -126,7 +145,14 @@ func TestResolve_Ollama_BothModels(t *testing.T) {
 	srv := newOllamaTagsServer(t, []string{ollamaEmbedModel, ollamaChatModel})
 	defer srv.Close()
 
-	embedder, chat, err := Resolve(ctx2s(t), "ollama", srv.URL, ollamaEmbedModel, ollamaChatModel, "", true, true)
+	embedder, chat, err := Resolve(ctx2s(t), ResolveConfig{
+		Provider:   "ollama",
+		Host:       srv.URL,
+		EmbedModel: ollamaEmbedModel,
+		ChatModel:  ollamaChatModel,
+		CheckEmbed: true,
+		CheckChat:  true,
+	})
 	if err != nil {
 		t.Fatalf("Resolve() error = %v", err)
 	}
@@ -142,7 +168,12 @@ func TestResolve_Ollama_EmbedOnly(t *testing.T) {
 	srv := newOllamaTagsServer(t, []string{ollamaEmbedModel})
 	defer srv.Close()
 
-	embedder, chat, err := Resolve(ctx2s(t), "ollama", srv.URL, ollamaEmbedModel, "", "", true, false)
+	embedder, chat, err := Resolve(ctx2s(t), ResolveConfig{
+		Provider:   "ollama",
+		Host:       srv.URL,
+		EmbedModel: ollamaEmbedModel,
+		CheckEmbed: true,
+	})
 	if err != nil {
 		t.Fatalf("Resolve() error = %v", err)
 	}
