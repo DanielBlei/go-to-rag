@@ -8,8 +8,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/DanielBlei/go-to-rag/internal/inference"
 	"github.com/DanielBlei/go-to-rag/internal/ingest"
-	"github.com/DanielBlei/go-to-rag/internal/ollama"
 	"github.com/DanielBlei/go-to-rag/internal/vectorstore"
 )
 
@@ -48,16 +48,14 @@ func runIngest(cmd *cobra.Command, args []string) error {
 		ingestPath = args[0]
 	}
 
-	client, err := ollama.New(host, embedModel, "")
+	embedder, _, err := inference.Resolve(
+		cmd.Context(), inferenceBackend, host, embedModel, "", apiKey, true, false,
+	)
 	if err != nil {
-		return fmt.Errorf("ollama init: %w", err)
-	}
-
-	if err := client.Validate(cmd.Context(), true, false); err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
-			return fmt.Errorf("ollama timed out, is it overloaded")
+			return fmt.Errorf("inference backend timed out, is it overloaded")
 		}
-		return fmt.Errorf("ollama embed validation: %w", err)
+		return err
 	}
 
 	store, err := vectorstore.NewSQLite(dbPath)
@@ -71,7 +69,7 @@ func runIngest(cmd *cobra.Command, args []string) error {
 		Str("glob", globPat).
 		Msg("starting ingest")
 
-	sources, totalChunks, err := ingest.Run(cmd.Context(), store, client, ingestPath, ingest.Options{
+	sources, totalChunks, err := ingest.Run(cmd.Context(), store, embedder, ingestPath, ingest.Options{
 		ChunkSize:     chunkSize,
 		Overlap:       overlap,
 		Glob:          globPat,

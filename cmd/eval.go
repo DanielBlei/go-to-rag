@@ -15,7 +15,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/DanielBlei/go-to-rag/internal/eval"
-	"github.com/DanielBlei/go-to-rag/internal/ollama"
+	"github.com/DanielBlei/go-to-rag/internal/inference"
 )
 
 const (
@@ -27,6 +27,8 @@ const (
 var (
 	evalHost       string
 	evalEmbedModel string
+	evalInference  string
+	evalApiKey     string
 	evalDataset    string
 	evalCorpus     string
 	evalTopK       int
@@ -40,8 +42,10 @@ var (
 
 func init() {
 	rootCmd.AddCommand(evalCmd)
-	evalCmd.Flags().StringVar(&evalHost, "host", defaultHost, "Ollama host URL")
-	evalCmd.Flags().StringVar(&evalEmbedModel, "embed-model", defaultEmbedModel, "Ollama embedding model")
+	evalCmd.Flags().StringVar(&evalHost, "host", defaultHost, "inference backend host URL")
+	evalCmd.Flags().StringVar(&evalEmbedModel, "embed-model", defaultEmbedModel, "embedding model name")
+	evalCmd.Flags().StringVar(&evalInference, "inference", "ollama", "inference backend: ollama or vllm")
+	evalCmd.Flags().StringVar(&evalApiKey, "api-key", "", "bearer token for backend auth")
 	evalCmd.Flags().StringVar(&evalDataset, "dataset", defaultEvalDataset, "path to golden.v1.json")
 	evalCmd.Flags().StringVar(&evalCorpus, "corpus", defaultEvalCorpus, "path to the frozen corpus directory")
 	evalCmd.Flags().IntVar(&evalTopK, "top-k", defaultTopK, "top-k chunks to retrieve per query")
@@ -78,19 +82,25 @@ func runEval(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("hash corpus: %w", err)
 	}
 
-	client, err := ollama.New(evalHost, evalEmbedModel, "")
+	embedder, _, err := inference.Resolve(ctx, evalInference, evalHost, evalEmbedModel, "", evalApiKey, true, false)
 	if err != nil {
-		return fmt.Errorf("ollama init: %w", err)
-	}
-	if err := client.Validate(ctx, true, false); err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
-			return fmt.Errorf("ollama timed out, is it overloaded")
+			return fmt.Errorf("inference backend timed out, is it overloaded")
 		}
-		return fmt.Errorf("ollama embed validation: %w", err)
+		return err
 	}
-	digest, err := client.EmbedModelDigest(ctx)
-	if err != nil {
-		log.Warn().Err(err).Msg("could not fetch embed-model digest")
+
+	type digestProvider interface {
+		EmbedModelDigest(ctx context.Context) (string, error)
+	}
+	var digest string
+	if dp, ok := embedder.(digestProvider); ok {
+		digest, err = dp.EmbedModelDigest(ctx)
+		if err != nil {
+			log.Warn().Err(err).Msg("could not fetch embed-model digest")
+		}
+	} else {
+		log.Warn().Msg("embed model digest unavailable for this backend")
 	}
 
 	meta := eval.HermeticMeta{
@@ -113,7 +123,7 @@ func runEval(cmd *cobra.Command, _ []string) error {
 		Msg("starting eval")
 
 	buildStart := time.Now()
-	setup, err := eval.BuildHermetic(ctx, client, eval.HermeticOptions{
+	setup, err := eval.BuildHermetic(ctx, embedder, eval.HermeticOptions{
 		CorpusDir: evalCorpus,
 		ChunkSize: evalChunkSize,
 		Overlap:   evalOverlap,

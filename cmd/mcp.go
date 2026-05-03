@@ -1,12 +1,10 @@
 package cmd
 
 import (
-	"fmt"
-
 	"github.com/spf13/cobra"
 
+	"github.com/DanielBlei/go-to-rag/internal/inference"
 	"github.com/DanielBlei/go-to-rag/internal/mcpserver"
-	"github.com/DanielBlei/go-to-rag/internal/ollama"
 	"github.com/DanielBlei/go-to-rag/internal/rag"
 )
 
@@ -41,11 +39,6 @@ var mcpCmd = &cobra.Command{
 }
 
 func runMCP(cmd *cobra.Command, _ []string) error {
-	client, err := ollama.New(host, embedModel, mcpChatModel)
-	if err != nil {
-		return fmt.Errorf("ollama init: %w", err)
-	}
-
 	store, err := openStore(cmd.Context(), dbPath)
 	if err != nil {
 		return err
@@ -53,15 +46,14 @@ func runMCP(cmd *cobra.Command, _ []string) error {
 	defer func() { _ = store.Close() }()
 
 	checkChat := mcpChatModel != ""
-	if err := client.Validate(cmd.Context(), true, checkChat); err != nil {
-		return fmt.Errorf("ollama validation: %w", err)
+	embedder, chatServer, err := inference.Resolve(
+		cmd.Context(), inferenceBackend, host, embedModel, mcpChatModel, apiKey, true, checkChat,
+	)
+	if err != nil {
+		return err
 	}
 
-	ragPipeline := rag.NewPipeline(client, store)
-	var chatServer rag.ChatServer
-	if mcpChatModel != "" {
-		chatServer = client
-	}
+	ragPipeline := rag.NewPipeline(embedder, store)
 	srv := mcpserver.New(ragPipeline, chatServer, mcpTopK, mcpThinkMode, mcpConfThreshold)
 
 	if mcpAddr != "" {

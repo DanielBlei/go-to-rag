@@ -1,13 +1,12 @@
 package cmd
 
 import (
-	"fmt"
 	"net"
 
 	"github.com/spf13/cobra"
 
 	"github.com/DanielBlei/go-to-rag/internal/grpcserver"
-	"github.com/DanielBlei/go-to-rag/internal/ollama"
+	"github.com/DanielBlei/go-to-rag/internal/inference"
 	"github.com/DanielBlei/go-to-rag/internal/rag"
 )
 
@@ -40,26 +39,23 @@ var serveCmd = &cobra.Command{
 }
 
 func runServe(cmd *cobra.Command, _ []string) error {
-	client, err := ollama.New(host, embedModel, serveModel)
-	if err != nil {
-		return fmt.Errorf("ollama init: %w", err)
-	}
-
 	store, err := openStore(cmd.Context(), dbPath)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = store.Close() }()
 
-	if err := client.Validate(cmd.Context(), true, true); err != nil {
-		return fmt.Errorf("ollama validation: %w", err)
+	embedder, chatServer, err := inference.Resolve(
+		cmd.Context(), inferenceBackend, host, embedModel, serveModel, apiKey, true, true,
+	)
+	if err != nil {
+		return err
 	}
 
-	ragPipeline := rag.NewPipeline(client, store)
-	// client satisfies both rag.Embedder (via ragPipeline) and rag.ChatServer.
+	ragPipeline := rag.NewPipeline(embedder, store)
 	// Server is stateless: clients dictate think_mode via gRPC requests.
 	// When clients omit think_mode, the server uses ThinkAuto (model default).
-	srv := grpcserver.New(ragPipeline, client, serveTopK, serveWithFallback, rag.ThinkAuto)
+	srv := grpcserver.New(ragPipeline, chatServer, serveTopK, serveWithFallback, rag.ThinkAuto)
 
 	if grpcListener != nil {
 		return srv.ServeListener(cmd.Context(), grpcListener)
