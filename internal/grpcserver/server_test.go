@@ -21,11 +21,6 @@ import (
 	"github.com/DanielBlei/go-to-rag/internal/vectorstore"
 )
 
-// thinkingWriter mirrors ollama.ThinkingWriter for test-local type assertions.
-type thinkingWriter interface {
-	WriteThinking(p []byte) (int, error)
-}
-
 type fakeRetriever struct {
 	text   string
 	chunks []vectorstore.Result
@@ -85,7 +80,7 @@ func (f *fakeChatServer) Chat(
 	// Suppress thinking for ThinkHidden or ThinkDisabled modes, matching ollama.Client behavior.
 	if f.thinking != "" && opts.ThinkMode != rag.ThinkHidden &&
 		opts.ThinkMode != rag.ThinkDisabled {
-		if tw, ok := w.(thinkingWriter); ok {
+		if tw, ok := w.(rag.ThinkingWriter); ok {
 			_, _ = tw.WriteThinking([]byte(f.thinking))
 		}
 	}

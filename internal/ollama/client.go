@@ -13,6 +13,7 @@ import (
 	"github.com/ollama/ollama/api"
 	"github.com/rs/zerolog/log"
 
+	"github.com/DanielBlei/go-to-rag/internal/httpclient"
 	"github.com/DanielBlei/go-to-rag/internal/rag"
 )
 
@@ -31,7 +32,8 @@ type Client struct {
 }
 
 // New creates a Client connected to the given host using the specified models.
-func New(host, embedModel, chatModel string) (*Client, error) {
+// apiKey is optional; when non-empty it is sent as a Bearer token on every request.
+func New(host, embedModel, chatModel, apiKey string) (*Client, error) {
 	u, err := url.Parse(host)
 	if err != nil {
 		return nil, fmt.Errorf("invalid host %q: %w", host, err)
@@ -45,8 +47,11 @@ func New(host, embedModel, chatModel string) (*Client, error) {
 			)
 		}
 	}
+	httpClient := &http.Client{
+		Transport: &httpclient.BearerTransport{Token: apiKey, Base: http.DefaultTransport},
+	}
 	return &Client{
-		api:        api.NewClient(u, http.DefaultClient),
+		api:        api.NewClient(u, httpClient),
 		embedModel: embedModel,
 		chatModel:  chatModel,
 	}, nil
@@ -172,7 +177,7 @@ func (c *Client) Chat(
 				return nil
 			}
 			// ThinkAuto: forward to writer.
-			if tw, ok := w.(ThinkingWriter); ok {
+			if tw, ok := w.(rag.ThinkingWriter); ok {
 				_, err := tw.WriteThinking([]byte(resp.Message.Thinking))
 				return err
 			}

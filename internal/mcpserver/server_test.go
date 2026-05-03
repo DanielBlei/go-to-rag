@@ -53,10 +53,7 @@ func (f *fakeChatServer) Chat(
 		return f.err
 	}
 	if f.thinking != "" {
-		type thinkingWriter interface {
-			WriteThinking([]byte) (int, error)
-		}
-		if tw, ok := w.(thinkingWriter); ok {
+		if tw, ok := w.(rag.ThinkingWriter); ok {
 			_, _ = tw.WriteThinking([]byte(f.thinking))
 		}
 	}

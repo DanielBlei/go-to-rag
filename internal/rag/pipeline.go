@@ -49,6 +49,14 @@ type Embedder interface {
 	Embed(ctx context.Context, text string) ([]float32, error)
 }
 
+// ThinkingWriter is an optional extension of io.Writer that routes thinking
+// tokens to a separate channel. Backends type-assert the writer to this
+// interface; callers that do not care about thinking can pass a plain io.Writer.
+type ThinkingWriter interface {
+	io.Writer
+	WriteThinking(p []byte) (int, error)
+}
+
 // Pipeline is the primary interface for the RAG retrieval pipeline.
 type Pipeline interface {
 	Retrieve(ctx context.Context, query string, limit int) (string, error)
