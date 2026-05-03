@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -14,12 +15,29 @@ import (
 )
 
 var (
-	host       string
-	embedModel string
-	dbPath     string
-	debug      bool
-	log        zerolog.Logger
+	host             string
+	embedModel       string
+	dbPath           string
+	debug            bool
+	log              zerolog.Logger
+	inferenceBackend = "ollama"
+	apiKey           string
 )
+
+// inferenceFlag implements pflag.Value for the --inference enum.
+type inferenceFlag struct{ val *string }
+
+func (f *inferenceFlag) String() string { return *f.val }
+func (f *inferenceFlag) Type() string   { return "backend" }
+func (f *inferenceFlag) Set(s string) error {
+	switch s {
+	case "ollama", "vllm":
+		*f.val = s
+		return nil
+	default:
+		return fmt.Errorf("invalid --inference value %q, must be ollama or vllm", s)
+	}
+}
 
 const (
 	defaultHost       = "http://localhost:11434"
@@ -66,12 +84,14 @@ func withSignalCancel(parent context.Context) (context.Context, context.CancelFu
 	return ctx, cancel
 }
 
-// addRAGFlags registers flags shared by commands that talk to Ollama and the vector store.
+// addRAGFlags registers flags shared by commands that talk to the inference backend and vector store.
 // todo: move to persistent flags; when calling Execute() more than once, e.g. integration tests, there is a stale state risk.
 func addRAGFlags(cmd *cobra.Command) {
-	cmd.Flags().StringVar(&host, "host", defaultHost, "Ollama host URL")
-	cmd.Flags().StringVar(&embedModel, "embed-model", defaultEmbedModel, "Ollama embedding model")
+	cmd.Flags().StringVar(&host, "host", defaultHost, "inference backend host URL")
+	cmd.Flags().StringVar(&embedModel, "embed-model", defaultEmbedModel, "embedding model name")
 	cmd.Flags().StringVar(&dbPath, "db", defaultDBPath, "path to the vector store database")
+	cmd.Flags().Var(&inferenceFlag{val: &inferenceBackend}, "inference", "inference backend: ollama or vllm")
+	cmd.Flags().StringVar(&apiKey, "api-key", "", "bearer token for backend auth (vLLM production, Ollama cloud)")
 }
 
 // Execute runs the root command with signal-aware context.

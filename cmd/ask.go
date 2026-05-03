@@ -8,7 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/DanielBlei/go-to-rag/internal/ollama"
+	"github.com/DanielBlei/go-to-rag/internal/inference"
 	"github.com/DanielBlei/go-to-rag/internal/rag"
 	"github.com/DanielBlei/go-to-rag/internal/vectorstore"
 )
@@ -77,13 +77,8 @@ func runAsk(cmd *cobra.Command, args []string) error {
 	prompt := args[0]
 
 	log.Debug().Str("model", chatModel).Str("embed-model", embedModel).
-		Str("host", host).Str("db", dbPath).Int("top-k", topK).
+		Str("host", host).Str("inference", inferenceBackend).Str("db", dbPath).Int("top-k", topK).
 		Bool("with-fallback", withFallback).Int("think", int(thinkMode)).Msg("initializing ask")
-
-	client, err := ollama.New(host, embedModel, chatModel)
-	if err != nil {
-		return fmt.Errorf("ollama init: %w", err)
-	}
 
 	store, storeErr := openStore(cmd.Context(), dbPath)
 	if storeErr != nil {
@@ -93,22 +88,26 @@ func runAsk(cmd *cobra.Command, args []string) error {
 	}
 
 	checkEmbed := store != nil
-	if err := client.Validate(cmd.Context(), checkEmbed, true); err != nil {
+	embedder, chatServer, err := inference.Resolve(
+		cmd.Context(), inferenceBackend, host, embedModel, chatModel, apiKey,
+		checkEmbed, true,
+	)
+	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
-			return fmt.Errorf("ollama timed out, is it overloaded")
+			return fmt.Errorf("inference backend timed out, is it overloaded")
 		}
-		return fmt.Errorf("ollama validation: %w", err)
+		return err
 	}
 
 	var chatErr error
 	chatOpts := rag.ChatOptions{ThinkMode: thinkMode}
-	writer := ollama.NewTerminalWriter(os.Stdout)
+	writer := rag.NewTerminalWriter(os.Stdout)
 	if store != nil {
-		pipeline := rag.NewPipeline(client, store)
+		pipeline := rag.NewPipeline(embedder, store)
 		contextBlock, err := rag.Ask(
 			cmd.Context(),
 			pipeline,
-			client,
+			chatServer,
 			prompt,
 			topK,
 			withFallback,
@@ -124,7 +123,7 @@ func runAsk(cmd *cobra.Command, args []string) error {
 		log.Debug().Str("prompt", prompt).Bool("rag", contextBlock != "").Msg("user input")
 	} else {
 		log.Debug().Str("prompt", prompt).Bool("rag", false).Msg("user input")
-		chatErr = client.Chat(cmd.Context(), rag.FallbackSystemPrompt, "", prompt, chatOpts, writer)
+		chatErr = chatServer.Chat(cmd.Context(), rag.FallbackSystemPrompt, "", prompt, chatOpts, writer)
 	}
 
 	if chatErr != nil {
@@ -136,7 +135,7 @@ func runAsk(cmd *cobra.Command, args []string) error {
 			return nil
 		}
 		if errors.Is(chatErr, context.DeadlineExceeded) {
-			return fmt.Errorf("ollama chat timed out, consider increasing chatTimeout")
+			return fmt.Errorf("chat timed out, consider increasing chatTimeout")
 		}
 		return fmt.Errorf("chat: %w", chatErr)
 	}
