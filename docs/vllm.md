@@ -14,6 +14,45 @@ go-to-rag uses three vLLM API endpoints:
 
 vLLM serves **one model per process**. Embedding models and chat models run as separate `vllm serve` processes on separate ports, which is why `--embed-host` exists as a distinct flag from `--chat-host`.
 
+## GPU requirements
+
+Minimum VRAM for common model combinations (fp16, single GPU):
+
+| Model | VRAM |
+|-------|------|
+| `nomic-ai/nomic-embed-text-v1.5` | ~1 GB |
+| `mixedbread-ai/mxbai-embed-large-v1` | ~1 GB |
+| `Qwen/Qwen3-1.7B` | ~4 GB |
+| `Qwen/Qwen3-4B` | ~8 GB |
+| `Qwen/Qwen3-8B` | ~16 GB |
+| `meta-llama/Llama-3.1-8B-Instruct` | ~16 GB |
+| `mistralai/Mistral-Small-3.1-24B-Instruct-2503` | ~48 GB |
+
+A typical dual-endpoint setup (embed + 8B chat) fits on a single A10G (24 GB) with both processes running concurrently.
+
+### Smaller GPU
+
+For a GPU in the 8–12 GB range, `Qwen/Qwen3-4B` is a good fit — it runs comfortably in fp16 alongside the embed model and supports reasoning tokens via `--think`:
+
+```bash
+# ~1 GB — embed
+vllm serve nomic-ai/nomic-embed-text-v1.5 --port 8001
+
+# ~8 GB — chat, cap context to keep KV cache predictable
+vllm serve Qwen/Qwen3-4B --port 8000 --max-model-len 4096
+```
+
+```bash
+./bin/go-to-rag --inference vllm \
+  --chat-host http://localhost:8000 \
+  --embed-host http://localhost:8001 \
+  --embed-model nomic-ai/nomic-embed-text-v1.5 \
+  --chat-model Qwen/Qwen3-4B \
+  ask "What does OLM do?"
+```
+
+`--max-model-len` caps the KV cache allocation regardless of the model's trained context window. 4096 is enough for RAG responses and leaves headroom on a 12 GB card. Drop to 2048 if you see OOM errors.
+
 ## Model naming
 
 vLLM uses HuggingFace model IDs, not Ollama's `name:tag` format:
