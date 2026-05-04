@@ -1,6 +1,6 @@
 # ingest
 
-Embed documents from a directory into the vector store using `mxbai-embed-large:latest`.
+Chunk, embed, and index documents into the vector store. Run this once per corpus — already-indexed files are skipped on subsequent runs.
 
 ## Usage
 
@@ -10,14 +10,19 @@ Embed documents from a directory into the vector store using `mxbai-embed-large:
 
 Default path: `./seeds`
 
-| Flag           | Default           | Description                             |
-|----------------|-------------------|-----------------------------------------|
-| `--chunk-size` | `512`             | Chunk size in characters (rune-based)   |
-| `--overlap`    | `50`              | Overlap between adjacent chunks         |
-| `--glob`           | `*.md`            | Glob pattern matched against filename at any depth under `[path]` |
-| `--no-recursive`   | `false`           | Only match files in the root directory, do not recurse |
-| `--include-hidden` | `false`           | Include hidden files and directories (names starting with `.`) |
-| `--db`             | `./data/index.db` | Vector store database path              |
+| Flag               | Default                    | Description                                                                        |
+|--------------------|----------------------------|------------------------------------------------------------------------------------|
+| `--inference`      | `ollama`                   | Inference backend: `ollama` or `vllm`                                              |
+| `--chat-host`      | `http://localhost:11434`   | Inference server URL (Ollama default; vLLM has no default — must be provided)      |
+| `--embed-host`     | (same as `--chat-host`)    | Embedding server URL; defaults to `--chat-host` when not set                       |
+| `--api-key`        |                            | Bearer token for backend authentication                                            |
+| `--embed-model`    | `mxbai-embed-large:latest` | Embedding model                                                                    |
+| `--db`             | `./data/index.db`          | Vector store database path                                                         |
+| `--chunk-size`     | `512`                      | Chunk size in characters (rune-based)                                              |
+| `--overlap`        | `50`                       | Overlap between adjacent chunks                                                    |
+| `--glob`           | `*.md`                     | Glob pattern matched against filename at any depth under `[path]`                  |
+| `--no-recursive`   | `false`                    | Only match files in the root directory, do not recurse                             |
+| `--include-hidden` | `false`                    | Include hidden files and directories (names starting with `.`)                     |
 
 ## Workflow
 
@@ -25,7 +30,7 @@ Default path: `./seeds`
 
 1. **Skip check**: `HasSource` queries SQLite by absolute path. Already-indexed files are skipped entirely.
 2. **Chunk**: file is read into memory, converted to `[]rune`, then split with a sliding window: `step = chunkSize - overlap`, producing chunks at offsets `0, step, 2*step, ...`. Whitespace-only chunks are dropped.
-3. **Embed**: each chunk is sent to Ollama (`mxbai-embed-large:latest`) and returns `[]float32` (1024 dimensions).
+3. **Embed**: each chunk is sent to the configured embedding backend and returns `[]float32`.
 4. **Store**: embedding is encoded as little-endian bytes (4 bytes × 768 = 3072 bytes) and inserted into SQLite. A failure at any chunk triggers `DeleteSource` to roll back all chunks for that file.
 
 ## Chunking
@@ -46,9 +51,7 @@ about none of them well.
 for dense reference material where each paragraph is a distinct concept. Go higher (1024+) for
 narrative text where ideas span multiple paragraphs and you want them retrieved together.
 
-One practical limit: `mxbai-embed-large` has a 512-token context window. A rune is not a token,
-but for ASCII-heavy text they are roughly 1:1. Chunks much larger than 512 runes will be silently
-truncated by the model, so the tail of a large chunk may not be represented in the embedding.
+One practical limit: `mxbai-embed-large` has a 512-token context window. For ASCII-heavy text, runes and tokens are roughly 1:1. Chunks significantly larger than 512 runes will be silently truncated by the model, so the tail of a large chunk may not be represented in the embedding. Other embedding models have different context windows — check the model card when changing `--embed-model`.
 
 ### Tuning overlap
 
@@ -89,10 +92,7 @@ entries.
 search results can return the actual text without going back to disk. This matters because source
 files may be deleted or moved after ingestion. The store is meant to be self-contained.
 
-- **embedding**: is the `[]float32` vector from Ollama, serialised as a little-endian byte array
-(4 bytes per float, 4096 bytes total for `mxbai-embed-large`'s 1024 dimensions). SQLite has no
-native float array type, so BLOB is the right fit. Encoding and decoding live in
-`internal/vectorstore/sqlite.go` (`encodeEmbedding` / `decodeEmbedding`).
+- **embedding**: is the `[]float32` vector from the configured embedding model, serialised as a little-endian byte array (4 bytes per float; 4096 bytes per chunk for `mxbai-embed-large`'s 1024 dimensions). SQLite has no native float array type, so BLOB is the right fit. Encoding and decoding live in `internal/vectorstore/sqlite.go` (`encodeEmbedding` / `decodeEmbedding`).
 
 - **chunk_index**: is the zero-based position of the chunk within its source file. Together with
 `source` it forms the `UNIQUE` constraint, which prevents double-inserting a chunk if ingest is
@@ -134,8 +134,20 @@ type Store interface {
 Any struct implementing these 6 methods plugs in with zero changes to `ingest` or `ask`.
 Candidates: Qdrant (gRPC), pgvector (SQL), or an HNSW index for ANN search.
 
+## Examples
+
+```bash
+# Ollama (default)
+./bin/go-to-rag ingest                                         # ./seeds -> ./data/index.db
+./bin/go-to-rag ingest ./vault                                 # recurse into any doc tree
+./bin/go-to-rag ingest --glob "*.txt" --db ./custom.db ./docs  # custom extension and db path
+
+```
+
+See [docs/vllm.md](vllm.md) for vLLM flag reference, model naming, and full command examples.
+
 ## Notes
 
 - Re-running skips already-indexed files; delete the DB to re-index from scratch.
 - `--debug` logs per-file chunk count and per-chunk embed progress.
-- Requires `mxbai-embed-large` reachable via Ollama; chat model is not used.
+- Requires the embedding backend to be reachable and the configured embedding model to be loaded; the chat model is not used during ingest.

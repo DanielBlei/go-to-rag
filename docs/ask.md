@@ -1,6 +1,6 @@
 # ask
 
-Ask a single question and get a streamed, RAG-augmented response.
+Ask a single question against an indexed knowledge base and get a streamed, RAG-augmented response. For tool-based access from an LLM assistant, see [`mcp`](mcp.md).
 
 ```bash
 ./bin/go-to-rag ask <prompt>
@@ -8,20 +8,23 @@ Ask a single question and get a streamed, RAG-augmented response.
 
 ## Flags
 
-| Flag              | Default                    | Description                                                                               |
-|-------------------|----------------------------|-------------------------------------------------------------------------------------------|
-| `--host`          | `http://localhost:11434`   | Ollama host URL                                                                           |
-| `--model`         | `qwen3:1.7b`               | Chat model                                                                                |
-| `--embed-model`   | `mxbai-embed-large:latest` | Embedding model (used only when the store is present)                                     |
-| `--db`            | `./data/index.db`          | Vector store database path                                                                |
-| `--top-k`         | `10`                       | Number of chunks/top matches to retrieve from the vector store                            |
-| `--with-fallback` | `false`                    | Let the model complement the answer with its own knowledge, with or without context found |
+| Flag              | Default                    | Description                                                                          |
+|-------------------|----------------------------|--------------------------------------------------------------------------------------|
+| `--inference`     | `ollama`                   | Inference backend: `ollama` or `vllm`                                                |
+| `--chat-host`     | `http://localhost:11434`   | Chat/inference server URL (Ollama default)                                           |
+| `--embed-host`    | (same as `--chat-host`)    | Embedding server URL; defaults to `--chat-host` when not set                         |
+| `--api-key`       |                            | Bearer token for backend authentication (required for secured vLLM endpoints)        |
+| `--chat-model`    | `qwen3:1.7b`               | Chat model                                                                           |
+| `--embed-model`   | `mxbai-embed-large:latest` | Embedding model                                                                      |
+| `--db`            | `./data/index.db`          | Vector store database path                                                           |
+| `--top-k`         | `10`                       | Number of chunks to retrieve from the vector store                                   |
+| `--with-fallback` | `false`                    | Allow the model to supplement retrieved context with its own knowledge               |
 | `--think`         | `auto`                     | Thinking token mode: `auto` (model default), `disabled` (no reasoning), `hidden` (reason silently) |
 
 ## Workflow
 
 1. **Open store**: opens the SQLite vector store at `--db`. If missing or empty, logs a warning and continues in fallback mode. No error, no exit.
-2. **Embed query**: the prompt is embedded via `mxbai-embed-large:latest` and the top `--top-k` chunks are retrieved by cosine similarity.
+2. **Embed query**: the prompt is embedded via the configured embedding model and the top `--top-k` chunks are retrieved by cosine similarity.
 3. **Build message**: retrieved chunks are joined with `---` separators and injected as a context block.
 4. **Generate**: the assembled message is streamed to the chat model. Tokens are written to stdout as they arrive.
 
@@ -37,13 +40,13 @@ Controls how the model's internal reasoning (supported by qwen3 family) is handl
 
 ```bash
 # Show reasoning in gray (default)
-./bin/go-to-rag ask --model go-to-rag:latest "What does OLM do?"
+./bin/go-to-rag ask --chat-model go-to-rag:latest "What does OLM do?"
 
 # Answer only, no visible reasoning
-./bin/go-to-rag ask --model go-to-rag:latest --think=hidden "What does OLM do?"
+./bin/go-to-rag ask --chat-model go-to-rag:latest --think=hidden "What does OLM do?"
 
 # Disable reasoning entirely (fastest)
-./bin/go-to-rag ask --model go-to-rag:latest --think=disabled "What does OLM do?"
+./bin/go-to-rag ask --chat-model go-to-rag:latest --think=disabled "What does OLM do?"
 ```
 
 `--think` is only effective with models that support reasoning tokens (e.g. qwen3). Other models ignore this flag.
@@ -62,20 +65,22 @@ Requires a populated store. See [quickstart](quickstart.md) to seed and ingest f
 
 ```bash
 # Standard RAG query using the tuned model (make model-create builds go-to-rag:latest)
-./bin/go-to-rag ask --model go-to-rag:latest "What does OLM do?"
+./bin/go-to-rag ask --chat-model go-to-rag:latest "What does OLM do?"
 
 # Point at a custom database
-./bin/go-to-rag ask --model go-to-rag:latest --db ./my-index.db "What is a Kubernetes operator?"
+./bin/go-to-rag ask --chat-model go-to-rag:latest --db ./my-index.db "What is a Kubernetes operator?"
 
 # Use a raw Ollama model (bypasses the RAG system prompt in the Modelfile)
-./bin/go-to-rag ask --model llama3.1:8b "Explain CRDs in depth"
+./bin/go-to-rag ask --chat-model llama3.1:8b "Explain CRDs in depth"
 
 # Hybrid, retrieved context injected, model may supplement with own knowledge
-./bin/go-to-rag ask --model go-to-rag:latest --with-fallback "What does OLM do?"
+./bin/go-to-rag ask --chat-model go-to-rag:latest --with-fallback "What does OLM do?"
 
 # Debug logs retrieved chunks and prompt assembly
-./bin/go-to-rag --debug ask --model go-to-rag:latest "What is a Kubernetes operator?"
+./bin/go-to-rag --debug ask --chat-model go-to-rag:latest "What is a Kubernetes operator?"
 ```
+
+See [docs/vllm.md](vllm.md) for vLLM flag reference, model naming, and full command examples.
 
 Or via Make:
 

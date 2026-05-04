@@ -1,6 +1,8 @@
 # serve
 
-Start a gRPC server that exposes the RAG pipeline over three RPCs: `Ask`, `RetrieveChunks`, and `GetServerConfig`.
+Expose the RAG pipeline over gRPC for service-to-service integration. Clients get typed RPCs, server-streaming for token-by-token answers, and per-request control over retrieval depth and thinking mode.
+
+Use `serve` when calling go-to-rag programmatically from another process. Use [`mcp`](mcp.md) when connecting to an LLM assistant.
 
 ```bash
 ./bin/go-to-rag serve
@@ -12,9 +14,9 @@ Start a gRPC server that exposes the RAG pipeline over three RPCs: `Ask`, `Retri
 |--------------------|----------------------------|-----------------------------------------------------------------------------------------------------------------------------------|
 | `--grpc-addr`      | `:50051`                   | Listen address                                                                                                                    |
 | `--top-k`          | `10`                       | Default number of chunks to retrieve per request; individual requests may override via `top_k`                                    |
-| `--model`          | `qwen3:1.7b`               | Ollama chat model (used by `Ask`)                                                                                                 |
+| `--chat-model`     | `qwen3:1.7b`               | Chat model (used by `Ask`)                                                                                                        |
 | `--with-fallback`  | `false`                    | Allow the model to answer from its own knowledge when context is missing                                                          |
-| `--host`           | `http://localhost:11434`   | Ollama host URL                                                                                                                   |
+| `--chat-host`      | `http://localhost:11434`   | Chat/inference server URL (Ollama default)                                                                                        |
 | `--embed-model`    | `mxbai-embed-large:latest` | Embedding model                                                                                                                   |
 | `--db`             | `./data/index.db`          | Vector store database path                                                                                                        |
 

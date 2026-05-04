@@ -1,6 +1,10 @@
 # Quickstart
 
+Get from zero to your first RAG-augmented answer in under five minutes.
+
 ## Prerequisites
+
+**Ollama (default)**
 
 [Ollama](https://ollama.com) running locally, with the default models pulled:
 
@@ -9,141 +13,59 @@ ollama pull qwen3:1.7b
 ollama pull mxbai-embed-large:latest
 ```
 
-## Modelfiles
+**vLLM (alternative)**
 
-Out-of-the-box Ollama models lack the RAG-specific system prompt that constrains answers to retrieved context. The Modelfiles in [`modelfiles/`](../modelfiles/README.md) add that, it's recommended to use them for best results.
+A [vLLM](https://docs.vllm.ai) server with a chat model and an embedding model loaded. See [docs/vllm.md](vllm.md) for setup, model naming, and all command examples.
 
-**Create the custom model:**
+## One-shot demo
 
-```bash
-# Default (qwen3:1.7b), change MODELFILE in the Makefile to recreate it
-make model-create
-
-# Or target a specific Modelfile directly
-ollama create go-to-rag:latest -f modelfiles/qwen3-0-6b.Modelfile
-```
-
-**Use it:**
+The fastest path — seeds the bundled K8s/OLM knowledge base, embeds it, and answers a question:
 
 ```bash
-./bin/go-to-rag ask --model go-to-rag:latest "How does OLM manage operator upgrades?"
-./bin/go-to-rag serve --model go-to-rag:latest
-./bin/go-to-rag mcp --model go-to-rag:latest
+make build && make run-demo
 ```
 
-See [`modelfiles/README.md`](../modelfiles/README.md) for available models and parameter details.
+## Step-by-step pipeline
 
-## Commands
-
-```bash
-./bin/go-to-rag ask <prompt>         # ask a question, stream the answer
-./bin/go-to-rag seed [directory]     # download documents for ingestion
-./bin/go-to-rag ingest [path]        # embed documents into the vector store
-./bin/go-to-rag mcp                  # start the MCP server for external LLM integration
-./bin/go-to-rag serve                # start the gRPC server on :50051
-```
-
-## ask
-
-```bash
-./bin/go-to-rag ask <prompt>
-```
-
-Retrieves the top `--top-k` chunks (default 10) from the vector store, injects them as context, and streams a RAG-augmented response. If the store is missing or empty, `ask` logs a warning and falls back to the model's own knowledge.
-
-```bash
-make build
-./bin/go-to-rag ask --model go-to-rag:latest "What is a Kubernetes operator?"    # tuned RAG model
-./bin/go-to-rag ask --model llama3.1:8b "Explain CRDs"                           # raw Ollama model
-./bin/go-to-rag ask --model go-to-rag:latest --with-fallback "What does OLM do?" # hybrid mode
-./bin/go-to-rag --debug ask --model go-to-rag:latest "What does OLM do?"         # log chunks + prompt
-```
-
-See [docs/ask.md](ask.md) for all flags and behaviour details.
-
-## seed
-
-```bash
-./bin/go-to-rag seed [directory]
-```
-
-Downloads documents to a local directory (default: `./seeds`). Uses a built-in manifest of 14
-K8s/OLM/OpenShift/Kubebuilder docs. Pass `--manifest` to use your own URL list.
-
-```bash
-./bin/go-to-rag seed                                   # downloads to ./seeds/
-./bin/go-to-rag seed ./my-docs                         # custom output dir
-./bin/go-to-rag seed --manifest urls.yaml ./my-docs    # custom manifest + dir
-```
-
-Existing files are skipped. Does not require Ollama.
-
-See [docs/seed.md](seed.md) for manifest format and default corpus details.
-
-## ingest
-
-```bash
-./bin/go-to-rag ingest [path]
-```
-
-Chunks files, embeds each chunk via Ollama (`mxbai-embed-large`), and stores the result in SQLite.
-Already-indexed files are skipped. Default path: `./seeds`.
-
-```bash
-./bin/go-to-rag ingest                                         # ./seeds -> ./data/index.db
-./bin/go-to-rag ingest ./vault                                 # recurse into any doc tree
-./bin/go-to-rag ingest --no-recursive ./docs                   # root directory only
-./bin/go-to-rag ingest --glob "*.txt" --db ./custom.db ./docs  # custom extension and db path
-```
-
-See [docs/ingest.md](ingest.md) for chunking algorithm, storage schema, and scaling notes.
-
-## mcp
-
-```bash
-./bin/go-to-rag mcp
-```
-
-Connect your knowledge base to Claude, GPT, or any MCP-compatible LLM. No local inference required.
+Each stage is independently composable:
 
 ```bash
 make build
 
-# Retrieval-only (no chat model required)
-claude mcp add go-to-rag -- ./bin/go-to-rag mcp
+# 1. Download K8s/OLM/OpenShift docs to ./seeds
+./bin/go-to-rag seed
 
-# With chat enabled
-claude mcp add go-to-rag -- ./bin/go-to-rag mcp --model qwen3:1.7b
+# 2. Chunk, embed, and index into SQLite at ./data/index.db
+./bin/go-to-rag ingest
+
+# 3. Retrieve context and stream an answer
+./bin/go-to-rag ask "What does OLM do?"
 ```
 
-Then in a Claude session:
+`ask` embeds your question, retrieves the top-10 most similar chunks, injects them as context, and streams the model's answer to stdout. If the store is missing or empty, it falls back to the model's own knowledge and logs a warning.
 
-```
-> use the go-to-rag tool. How does OLM work in OpenShift?
-> use the go-to-rag tool. What is a CRD and how does Kubebuilder use it?
-```
+## Using your own documents
 
-See [docs/mcp.md](mcp.md) for all flags, modes, and removal instructions.
-
-## serve
+Point `seed` at a custom manifest of URLs, or skip it entirely and ingest any local directory:
 
 ```bash
-./bin/go-to-rag serve
+# Ingest a local directory of Markdown files
+./bin/go-to-rag ingest ./my-docs
+
+# Download from a custom URL list, then ingest
+./bin/go-to-rag seed --manifest urls.yaml ./my-docs
+./bin/go-to-rag ingest ./my-docs
+
+# Ask against your corpus
+./bin/go-to-rag ask "What is the retention policy for audit logs?"
 ```
 
-Starts a gRPC server (default `:50051`) exposing two RPCs:
+See [docs/seed.md](seed.md) for the manifest format.
 
-- **Ask** — streams a RAG-augmented answer token by token
-- **RetrieveChunks** — returns scored chunks without generation, for service-to-service use
+## Next steps
 
-```bash
-./bin/go-to-rag serve                                   # listen on :50051
-./bin/go-to-rag serve --grpc-addr :9090                 # custom port
-./bin/go-to-rag serve --model llama3.1:8b --top-k 5     # override model and retrieval depth
-```
-
-See [docs/serve.md](serve.md) for all flags, RPCs, and grpcurl examples.
-
-## Flags
-
-`--debug` is the only global flag (available on all subcommands). All other flags (`--host`, `--model`, `--embed-model`, `--db`, `--with-fallback`, `--top-k`) are per-command. See [ask.md](ask.md) and [ingest.md](ingest.md) for per-command flag references.
+- **Tune the model** — [`modelfiles/README.md`](../modelfiles/README.md) has pre-tuned Modelfiles that add a RAG-specific system prompt. `make model-create` builds `go-to-rag:latest`.
+- **vLLM** — shared-GPU or production deployments: [docs/vllm.md](vllm.md)
+- **MCP** — connect to Claude or any MCP-compatible LLM as a tool: [docs/mcp.md](mcp.md)
+- **gRPC server** — service-to-service integration: [docs/serve.md](serve.md)
+- **Retrieval eval** — measure and iterate on retrieval quality: [docs/eval.md](eval.md)

@@ -7,16 +7,14 @@
 ![gRPC](https://img.shields.io/badge/gRPC-50051-244c5a?style=flat&logo=grpc)
 ![License](https://img.shields.io/badge/License-Apache%202.0-blue?style=flat)
 
-A RAG (Retrieval-Augmented Generation) engine written in Go. Supports [Ollama](https://ollama.com) for fully local inference and [vLLM](https://docs.vllm.ai) for shared-GPU deployments — switchable at runtime with `--inference`.
+A production-grade RAG pipeline in Go. Embed a document corpus, retrieve relevant context, and stream answers from any OpenAI-compatible LLM.  
 
-Seed, embed, and query a knowledge base entirely on-device. 
-
-Access the pipeline through the CLI, connect it to Claude or any MCP-compatible LLM via the built-in [MCP](docs/mcp.md) server, or integrate service-to-service over [gRPC](docs/serve.md) with native token streaming.
+Runs fully local with [Ollama](https://ollama.com). Scales to shared-GPU deployments with [vLLM](https://docs.vllm.ai). Query through the CLI, connect any MCP client via the built-in [MCP server](docs/mcp.md), or integrate service-to-service over [gRPC](docs/serve.md) with native token streaming.
 
 ## Requirements
 
 - Go 1.25+
-- [Ollama](https://ollama.com) 0.5+ running locally (default inference backend for development)
+- [Ollama](https://ollama.com) 0.5+ (default inference backend)
 
 Pull the default models before running:
 
@@ -25,11 +23,11 @@ ollama pull qwen3:1.7b                # chat
 ollama pull mxbai-embed-large:latest  # embeddings
 ```
 
-To use [vLLM](https://docs.vllm.ai) instead, pass `--inference vllm` with `--chat-host`, `--embed-host`, and `--embed-model` to all commands. See [docs/vllm.md](docs/vllm.md).
+To use [vLLM](https://docs.vllm.ai) instead, pass `--inference vllm` with `--chat-host`, `--embed-host`, and `--embed-model`. See [docs/vllm.md](docs/vllm.md).
 
 ## Quick start
 
-Once the models are pulled (see Requirements above), seed a K8s/OLM/OpenShift knowledge base and ask your first question in one shot:
+Seed a K8s/OLM/OpenShift knowledge base and ask your first question:
 
 ```bash
 make run-demo    # seed docs, embed into SQLite, and ask a question
@@ -44,29 +42,29 @@ make build
 ./bin/go-to-rag ask "What does OLM do?"   # retrieve context and stream the answer
 ```
 
-See [docs/quickstart.md](docs/quickstart.md) for the full pipeline walkthrough and flag reference.
+See [docs/quickstart.md](docs/quickstart.md) for the full walkthrough, including how to use your own documents.
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
-| `ask <prompt>` | RAG-augmented question, retrieves relevant chunks and streams the answer |
+| `ask <prompt>` | RAG-augmented question — retrieves relevant chunks and streams the answer |
 | `seed [dir]` | Download K8s/OLM/OpenShift docs for ingestion (default: `./seeds`) |
 | `ingest [path]` | Chunk, embed, and index documents into SQLite (default: `./seeds`) |
 | `eval` | Assert retrieval quality against a golden query set and produce a reproducible report |
-| `mcp` | Start the MCP server for external LLM integration (stdio by default, SSE with `--addr`) |
-| `serve` | Start the gRPC server (default `:50051`); exposes `Ask` (streaming) and `RetrieveChunks` RPCs |
+| `mcp` | Start the MCP server — exposes the pipeline as tools to Claude or any MCP-compatible LLM |
+| `serve` | Start the gRPC server (default `:50051`) for service-to-service integration |
 
 ## Stack
 
 | Component | Choice | Rationale |
 |-----------|--------|-----------|
-| Language | Go | Fast, compiled, good fit for systems tooling |
-| Embeddings | configurable via `--embed-model` | Pluggable; defaults to `mxbai-embed-large:latest` with Ollama |
+| Language | Go | Compiled, low-overhead, good fit for systems tooling |
+| Embeddings | configurable via `--embed-model` | Pluggable; defaults to `mxbai-embed-large:latest` |
 | Vector store | SQLite (WAL mode) | Zero-dependency embedded storage; swappable via `Store` interface |
-| Inference | Ollama · vLLM | Pluggable via `--inference`; Ollama for local use, vLLM for shared-GPU deployments |
-| MCP SDK | [`modelcontextprotocol/go-sdk`](https://github.com/modelcontextprotocol/go-sdk) | Official Go MCP SDK for tool registration, stdio and SSE transport |
-| gRPC | `google.golang.org/grpc` + protobuf | RPC interface for service-to-service and programmatic access |
+| Inference | Ollama · vLLM | `--inference` flag; Ollama for local dev, vLLM for shared-GPU deployments |
+| MCP SDK | [`modelcontextprotocol/go-sdk`](https://github.com/modelcontextprotocol/go-sdk) | Official Go MCP SDK; stdio and SSE transport |
+| gRPC | `google.golang.org/grpc` + protobuf | Typed RPC interface for service-to-service and programmatic access |
 | Protobuf | `buf` CLI | Schema definition, linting, and Go stub generation |
 | CLI | Cobra | Subcommand structure with per-command flags |
 
@@ -74,37 +72,35 @@ See [docs/quickstart.md](docs/quickstart.md) for the full pipeline walkthrough a
 
 Two layers of indirect prompt injection mitigation (OWASP LLM02):
 
-- **`InjectionGuard`** - `ChatServer` decorator applied automatically in `Ask()`. 
-Sanitises embedded sentinel strings, frames the context block with trust boundary markers, and appends an untrusted-data notice to the system prompt. Covers all entry points with no per-transport opt-in.
-- **MCP structured envelope** - `check_rag_knowledge_base` returns a JSON object with a `_data_notice` sentinel and per-chunk attribution and confidence scores rather than raw text.
+- **`InjectionGuard`** — a `ChatServer` decorator applied automatically in `Ask()`. Sanitises embedded sentinel strings, frames the context block with trust boundary markers, and appends an untrusted-data notice to the system prompt. Covers all entry points with no per-transport opt-in required.
+- **MCP structured envelope** — `check_rag_knowledge_base` returns a JSON object with a `_data_notice` sentinel and per-chunk attribution and confidence scores rather than raw text.
 
-> **Note:**  Sentinel strings are fixed in source, this mitigates naïve injection, not targeted attacks. 
-A per-request nonce would be stronger and is a known future direction. Prompt guardrails (input/output validation pass) would follow the same `ChatServer` decorator pattern.
+> **Note:** Sentinel strings are fixed in source — this mitigates naïve injection, not targeted attacks. A per-request nonce would be stronger and is a known future direction. Prompt guardrails (input/output validation) would follow the same `ChatServer` decorator pattern.
 
 ## Models
 
-The default chat model (`qwen3:1.7b`) is balanced for speed and quality on development hardware. Additional pre-tuned Modelfiles are in [`modelfiles/`](modelfiles/README.md).
+The default chat model (`qwen3:1.7b`) runs on consumer hardware and supports chain-of-thought reasoning via `--think`. Additional pre-tuned Modelfiles that add a RAG-specific system prompt are in [`modelfiles/`](modelfiles/README.md).
 
-`make model-create` rebuilds `go-to-rag:latest` from the `MODELFILE` set in the Makefile, used by `run-demo`. 
-
-For any CLI command, pass `--chat-model` directly instead. See [Quickstart](#quickstart) and [`modelfiles/`](modelfiles/README.md).
-
-> **Note:** Out-of-the-box Ollama models aren't tuned for RAG. For best results, use one of the provided Modelfiles, which prioritise answering questions.
+> **Note:** Out-of-the-box Ollama models are not tuned for RAG. For best results, use one of the provided Modelfiles — `make model-create` builds `go-to-rag:latest` from the default.
 
 ## Evaluation
 
-`eval` measures retrieval quality before you rely on the pipeline. It runs assertion-based metrics against a frozen corpus and a golden query set: no judge, no external calls beyond the embedding model, and the same inputs always produce the same numbers. Use it to validate changes to chunk size, overlap, or embedding model before committing them.
+`eval` measures retrieval quality before you rely on the pipeline. It runs assertion-based metrics (Hit@K, MRR, Precision@K, Recall@K) against a frozen corpus and a golden query set: no judge model, no external calls beyond the embedding model, and the same inputs always produce the same numbers.
 
-Run `make eval` for a zero-config text report using the bundled corpus and golden set. An LLM Judge tier for correctness and faithfulness scoring is planned once the assertion baseline is stable. See [docs/eval.md](docs/eval.md) for usage, metrics, and the full methodology.
+```bash
+make eval    # zero-config text report against the bundled K8s corpus
+```
+
+Use the metric deltas to validate changes to chunk size, overlap, or embedding model before committing them. An LLM Judge tier for answer correctness and faithfulness scoring is planned once the assertion baseline is stable. See [docs/eval.md](docs/eval.md) for methodology and a full sample report.
 
 ## Docker
 
-Requires Ollama running on the host. The container connects to it via `--network host`. Auto-detects podman (default) or docker:
+Requires Ollama running on the host. Auto-detects podman (preferred) or docker:
 
 ```bash
 make docker-demo
 
-# Override the prompt, embed model, or container runtime:
+# Overrides:
 make docker-demo DEMO_PROMPT="What is a CRD?"
 make docker-demo EMBED_MODEL=mxbai-embed-large:latest CONTAINER_TOOL=docker
 ```
@@ -121,9 +117,7 @@ docker run --rm --network host go-to-rag:latest ask "What is a CRD?"
 
 Domain-scoped RAG agents behind a router with concurrent fan-out queries.
 
-The gRPC layer provides the service-to-service backbone: each domain agent is a `go-to-rag` instance serving its own knowledge base over gRPC, and the router fans out queries to all agents in parallel, merging their streamed responses.
-
-Access the router through any entry point — CLI, MCP, or gRPC. Each domain agent can be backed by a shared vLLM process using `--inference vllm`, making efficient use of GPU resources across agents.
+The gRPC layer provides the service-to-service backbone: each domain agent is a `go-to-rag` instance serving its own knowledge base, and the router fans out queries to all agents in parallel, merging their streamed responses. Each agent can share a vLLM process via `--inference vllm`, making efficient use of GPU resources across the fleet.
 
 ```mermaid
 graph TB

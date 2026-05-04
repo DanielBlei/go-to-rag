@@ -105,7 +105,9 @@ func (c *Client) loadedModels(ctx context.Context, baseURL string) (map[string]b
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
 		var apiErr struct {
-			Error struct{ Message string `json:"message"` } `json:"error"`
+			Error struct {
+				Message string `json:"message"`
+			} `json:"error"`
 		}
 		if json.Unmarshal(body, &apiErr) == nil && apiErr.Error.Message != "" {
 			return nil, fmt.Errorf("vLLM /v1/models returned %d: %s", resp.StatusCode, apiErr.Error.Message)
@@ -158,7 +160,9 @@ func (c *Client) Embed(ctx context.Context, text string) ([]float32, error) {
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
 		var apiErr struct {
-			Error struct{ Message string `json:"message"` } `json:"error"`
+			Error struct {
+				Message string `json:"message"`
+			} `json:"error"`
 		}
 		if json.Unmarshal(body, &apiErr) == nil && apiErr.Error.Message != "" {
 			return nil, fmt.Errorf("embed: vLLM returned %d: %s", resp.StatusCode, apiErr.Error.Message)
@@ -251,7 +255,9 @@ func (c *Client) Chat(
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
 		var apiErr struct {
-			Error struct{ Message string `json:"message"` } `json:"error"`
+			Error struct {
+				Message string `json:"message"`
+			} `json:"error"`
 		}
 		if json.Unmarshal(body, &apiErr) == nil && apiErr.Error.Message != "" {
 			return fmt.Errorf("chat: vLLM returned %d: %s", resp.StatusCode, apiErr.Error.Message)
