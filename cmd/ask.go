@@ -57,7 +57,7 @@ func (f *thinkModeFlag) Type() string {
 func init() {
 	rootCmd.AddCommand(askCmd)
 	addRAGFlags(askCmd)
-	askCmd.Flags().StringVar(&chatModel, "model", defaultChatModel, "Ollama chat model")
+	askCmd.Flags().StringVar(&chatModel, "chat-model", defaultChatModel, "chat model name")
 	askCmd.Flags().
 		BoolVar(&withFallback, "with-fallback", false, "allow the model to answer from its own knowledge when context is missing")
 	askCmd.Flags().
@@ -76,8 +76,8 @@ var askCmd = &cobra.Command{
 func runAsk(cmd *cobra.Command, args []string) error {
 	prompt := args[0]
 
-	log.Debug().Str("model", chatModel).Str("embed-model", embedModel).
-		Str("host", host).Str("inference", inferenceProvider).Str("embed-host", embedHost).
+	log.Debug().Str("chat-model", chatModel).Str("embed-model", embedModel).
+		Str("chat-host", host).Str("inference", inferenceProvider).Str("embed-host", embedHost).
 		Str("db", dbPath).Int("top-k", topK).Bool("with-fallback", withFallback).
 		Int("think", int(thinkMode)).Msg("initializing ask")
 
@@ -91,7 +91,7 @@ func runAsk(cmd *cobra.Command, args []string) error {
 	checkEmbed := store != nil
 	embedder, chatServer, err := inference.Resolve(cmd.Context(), inference.ResolveConfig{
 		Provider:   inferenceProvider,
-		Host:       host,
+		ChatHost:   host,
 		EmbedHost:  embedHost,
 		EmbedModel: embedModel,
 		ChatModel:  chatModel,

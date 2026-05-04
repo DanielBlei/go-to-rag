@@ -24,7 +24,7 @@ func init() {
 	mcpCmd.Flags().
 		IntVar(&mcpTopK, "top-k", 10, "number of chunks/top matches to retrieve from the vector store")
 	mcpCmd.Flags().
-		StringVar(&mcpChatModel, "model", "", "Ollama chat model; required to enable the ask_to_rag_system chat tool")
+		StringVar(&mcpChatModel, "chat-model", "", "chat model name; required to enable the ask_to_rag_system chat tool")
 	mcpCmd.Flags().
 		Var(&thinkModeFlag{val: &mcpThinkMode}, "think", "default thinking mode: auto, disabled, or hidden")
 	mcpCmd.Flags().
@@ -48,7 +48,7 @@ func runMCP(cmd *cobra.Command, _ []string) error {
 	checkChat := mcpChatModel != ""
 	embedder, chatServer, err := inference.Resolve(cmd.Context(), inference.ResolveConfig{
 		Provider:   inferenceProvider,
-		Host:       host,
+		ChatHost:   host,
 		EmbedHost:  embedHost,
 		EmbedModel: embedModel,
 		ChatModel:  mcpChatModel,

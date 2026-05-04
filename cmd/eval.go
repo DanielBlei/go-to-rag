@@ -42,7 +42,7 @@ var (
 
 func init() {
 	rootCmd.AddCommand(evalCmd)
-	evalCmd.Flags().StringVar(&evalHost, "host", defaultHost, "inference backend host URL")
+	evalCmd.Flags().StringVar(&evalHost, "chat-host", defaultHost, "inference backend host URL")
 	evalCmd.Flags().StringVar(&evalEmbedModel, "embed-model", defaultEmbedModel, "embedding model name")
 	evalCmd.Flags().StringVar(&evalInference, "inference", "ollama", "inference backend: ollama or vllm")
 	evalCmd.Flags().StringVar(&evalApiKey, "api-key", "", "bearer token for backend auth")
@@ -84,7 +84,7 @@ func runEval(cmd *cobra.Command, _ []string) error {
 
 	embedder, _, err := inference.Resolve(ctx, inference.ResolveConfig{
 		Provider:   evalInference,
-		Host:       evalHost,
+		ChatHost:   evalHost,
 		EmbedModel: evalEmbedModel,
 		APIKey:     evalApiKey,
 		CheckEmbed: true,

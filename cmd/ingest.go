@@ -50,7 +50,7 @@ func runIngest(cmd *cobra.Command, args []string) error {
 
 	embedder, _, err := inference.Resolve(cmd.Context(), inference.ResolveConfig{
 		Provider:   inferenceProvider,
-		Host:       host,
+		ChatHost:   host,
 		EmbedHost:  embedHost,
 		EmbedModel: embedModel,
 		APIKey:     apiKey,

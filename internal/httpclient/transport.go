@@ -10,9 +10,7 @@ type BearerTransport struct {
 
 func (t *BearerTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	if t.Token != "" {
-		// Clone with the request's own context (set by NewRequestWithContext upstream).
-		// RoundTripper contract forbids mutating the original request; Clone preserves
-		// context cancellation without introducing a new context.
+		// RoundTripper contract forbids mutating the original request; clone before setting the header.
 		r = r.Clone(r.Context())
 		r.Header.Set("Authorization", "Bearer "+t.Token)
 	}

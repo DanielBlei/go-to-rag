@@ -71,7 +71,7 @@ func ctx2s(t *testing.T) context.Context {
 }
 
 func TestResolve_UnknownProvider(t *testing.T) {
-	_, _, err := Resolve(context.Background(), ResolveConfig{Provider: "foobar", Host: "http://localhost"})
+	_, _, err := Resolve(context.Background(), ResolveConfig{Provider: "foobar", ChatHost: "http://localhost"})
 	if err == nil {
 		t.Fatal("expected error for unknown provider")
 	}
@@ -86,7 +86,7 @@ func TestResolve_vLLM_BothModels(t *testing.T) {
 
 	embedder, chat, err := Resolve(ctx2s(t), ResolveConfig{
 		Provider:   "vllm",
-		Host:       srv.URL,
+		ChatHost:       srv.URL,
 		EmbedModel: vllmEmbedModel,
 		ChatModel:  vllmChatModel,
 		CheckEmbed: true,
@@ -109,7 +109,7 @@ func TestResolve_vLLM_EmbedOnly(t *testing.T) {
 
 	embedder, chat, err := Resolve(ctx2s(t), ResolveConfig{
 		Provider:   "vllm",
-		Host:       srv.URL,
+		ChatHost:       srv.URL,
 		EmbedModel: vllmEmbedModel,
 		CheckEmbed: true,
 	})
@@ -127,7 +127,7 @@ func TestResolve_vLLM_EmbedOnly(t *testing.T) {
 func TestResolve_vLLM_Unreachable(t *testing.T) {
 	_, _, err := Resolve(ctx2s(t), ResolveConfig{
 		Provider:   "vllm",
-		Host:       "http://127.0.0.1:1",
+		ChatHost:       "http://127.0.0.1:1",
 		EmbedModel: vllmEmbedModel,
 		ChatModel:  vllmChatModel,
 		CheckEmbed: true,
@@ -147,7 +147,7 @@ func TestResolve_Ollama_BothModels(t *testing.T) {
 
 	embedder, chat, err := Resolve(ctx2s(t), ResolveConfig{
 		Provider:   "ollama",
-		Host:       srv.URL,
+		ChatHost:       srv.URL,
 		EmbedModel: ollamaEmbedModel,
 		ChatModel:  ollamaChatModel,
 		CheckEmbed: true,
@@ -170,7 +170,7 @@ func TestResolve_Ollama_EmbedOnly(t *testing.T) {
 
 	embedder, chat, err := Resolve(ctx2s(t), ResolveConfig{
 		Provider:   "ollama",
-		Host:       srv.URL,
+		ChatHost:       srv.URL,
 		EmbedModel: ollamaEmbedModel,
 		CheckEmbed: true,
 	})

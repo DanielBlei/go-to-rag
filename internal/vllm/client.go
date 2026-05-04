@@ -60,10 +60,6 @@ func New(host, embedHost, embedModel, chatModel, apiKey string) (*Client, error)
 // are loaded. The check is idempotent — subsequent calls return the cached result.
 // Embed and chat models are validated against their respective hosts independently,
 // supporting deployments where each model runs on a separate vLLM process.
-//
-// Note: sync.Once fires on the first call. checkEmbed/checkChat flags on subsequent
-// calls are silently ignored. This is safe for the current CLI usage model where
-// Resolve() creates a new Client per invocation and calls Validate() exactly once.
 func (c *Client) Validate(ctx context.Context, checkEmbed, checkChat bool) error {
 	c.once.Do(func() {
 		validateCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
@@ -107,7 +103,14 @@ func (c *Client) loadedModels(ctx context.Context, baseURL string) (map[string]b
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("vLLM /v1/models returned %d", resp.StatusCode)
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		var apiErr struct {
+			Error struct{ Message string `json:"message"` } `json:"error"`
+		}
+		if json.Unmarshal(body, &apiErr) == nil && apiErr.Error.Message != "" {
+			return nil, fmt.Errorf("vLLM /v1/models returned %d: %s", resp.StatusCode, apiErr.Error.Message)
+		}
+		return nil, fmt.Errorf("vLLM /v1/models returned %d: %s", resp.StatusCode, bytes.TrimSpace(body))
 	}
 
 	var modelsResp struct {
@@ -153,7 +156,14 @@ func (c *Client) Embed(ctx context.Context, text string) ([]float32, error) {
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("embed: vLLM returned %d", resp.StatusCode)
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		var apiErr struct {
+			Error struct{ Message string `json:"message"` } `json:"error"`
+		}
+		if json.Unmarshal(body, &apiErr) == nil && apiErr.Error.Message != "" {
+			return nil, fmt.Errorf("embed: vLLM returned %d: %s", resp.StatusCode, apiErr.Error.Message)
+		}
+		return nil, fmt.Errorf("embed: vLLM returned %d: %s", resp.StatusCode, bytes.TrimSpace(body))
 	}
 
 	var embedResp struct {
@@ -202,8 +212,11 @@ func (c *Client) Chat(
 	opts rag.ChatOptions,
 	w io.Writer,
 ) error {
-	ctx, cancel := context.WithTimeout(ctx, chatTimeout)
-	defer cancel()
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, chatTimeout)
+		defer cancel()
+	}
 
 	messages := buildMessages(systemPrompt, contextBlock, userPrompt)
 	body := chatRequest{
@@ -236,11 +249,19 @@ func (c *Client) Chat(
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("chat: vLLM returned %d", resp.StatusCode)
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		var apiErr struct {
+			Error struct{ Message string `json:"message"` } `json:"error"`
+		}
+		if json.Unmarshal(body, &apiErr) == nil && apiErr.Error.Message != "" {
+			return fmt.Errorf("chat: vLLM returned %d: %s", resp.StatusCode, apiErr.Error.Message)
+		}
+		return fmt.Errorf("chat: vLLM returned %d: %s", resp.StatusCode, bytes.TrimSpace(body))
 	}
 
 	tw, hasTW := w.(rag.ThinkingWriter)
 	scanner := bufio.NewScanner(resp.Body)
+	scanner.Buffer(make([]byte, 0, 512*1024), 1024*1024)
 	for scanner.Scan() {
 		line := scanner.Text()
 		if !strings.HasPrefix(line, "data: ") {

@@ -45,7 +45,7 @@ func (f *inferenceFlag) Set(s string) error {
 // hostFlag implements pflag.Value for URL flags.
 // Validates that the value is a well-formed http/https URL; for bare IP addresses
 // (no hostname) an explicit port is required. An empty value is accepted — it
-// means "default to --host" (used by --embed-host).
+// means "default to --chat-host" (used by --embed-host).
 type hostFlag struct{ val *string }
 
 func (f *hostFlag) String() string { return *f.val }
@@ -117,9 +117,9 @@ func withSignalCancel(parent context.Context) (context.Context, context.CancelFu
 // addRAGFlags registers flags shared by commands that talk to the inference backend and vector store.
 // todo: move to persistent flags; when calling Execute() more than once, e.g. integration tests, there is a stale state risk.
 func addRAGFlags(cmd *cobra.Command) {
-	cmd.Flags().Var(&hostFlag{val: &host}, "host", "URL for the chat/inference server")
+	cmd.Flags().Var(&hostFlag{val: &host}, "chat-host", "URL for the chat/inference server")
 	cmd.Flags().
-		Var(&hostFlag{val: &embedHost}, "embed-host", "URL for the embedding server; defaults to --host when empty")
+		Var(&hostFlag{val: &embedHost}, "embed-host", "URL for the embedding server; defaults to --chat-host when empty")
 	cmd.Flags().StringVar(&embedModel, "embed-model", defaultEmbedModel, "embedding model name")
 	cmd.Flags().StringVar(&dbPath, "db", defaultDBPath, "path to the vector store database")
 	cmd.Flags().Var(&inferenceFlag{val: &inferenceProvider}, "inference", "inference provider: ollama or vllm")
