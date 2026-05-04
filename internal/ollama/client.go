@@ -42,7 +42,7 @@ func New(host, embedHost, embedModel, chatModel, apiKey string) (*Client, error)
 	}
 	if embedHost != "" && embedHost != host {
 		log.Warn().Str("embed-host", embedHost).
-			Msg("--embed-host is ignored for ollama; all models are served from --host")
+			Msg("--embed-host is ignored for ollama; all models are served from --chat-host")
 	}
 	for _, m := range []string{embedModel, chatModel} {
 		if m != "" && !strings.Contains(m, ":") {

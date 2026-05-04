@@ -12,8 +12,8 @@ import (
 // ResolveConfig holds all parameters for Resolve.
 type ResolveConfig struct {
 	Provider   string // "ollama" or "vllm"
-	Host       string // primary (chat) server URL
-	EmbedHost  string // embedding server URL; defaults to Host when empty
+	ChatHost   string // chat/inference server URL
+	EmbedHost  string // embedding server URL; defaults to ChatHost when empty
 	EmbedModel string
 	ChatModel  string // empty for embed-only commands (ingest, eval)
 	APIKey     string // optional bearer token
@@ -27,7 +27,7 @@ type ResolveConfig struct {
 func Resolve(ctx context.Context, cfg ResolveConfig) (rag.Embedder, rag.ChatServer, error) {
 	switch cfg.Provider {
 	case "ollama":
-		c, err := ollama.New(cfg.Host, cfg.EmbedHost, cfg.EmbedModel, cfg.ChatModel, cfg.APIKey)
+		c, err := ollama.New(cfg.ChatHost, cfg.EmbedHost, cfg.EmbedModel, cfg.ChatModel, cfg.APIKey)
 		if err != nil {
 			return nil, nil, fmt.Errorf("backend init: %w", err)
 		}
@@ -41,7 +41,7 @@ func Resolve(ctx context.Context, cfg ResolveConfig) (rag.Embedder, rag.ChatServ
 		return c, chatServer, nil
 
 	case "vllm":
-		c, err := vllm.New(cfg.Host, cfg.EmbedHost, cfg.EmbedModel, cfg.ChatModel, cfg.APIKey)
+		c, err := vllm.New(cfg.ChatHost, cfg.EmbedHost, cfg.EmbedModel, cfg.ChatModel, cfg.APIKey)
 		if err != nil {
 			return nil, nil, fmt.Errorf("backend init: %w", err)
 		}

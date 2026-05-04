@@ -401,3 +401,92 @@ func TestChat_APIKey(t *testing.T) {
 		t.Errorf("got Authorization Bearer %q, want %q", gotKey, wantKey)
 	}
 }
+
+func TestChat_ServerError_IncludesBody(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		_, _ = fmt.Fprintf(w, `{"error":{"message":"model not found","type":"invalid_request_error"}}`)
+	}))
+	defer srv.Close()
+
+	c, _ := New(srv.URL, "", testEmbedModel, testChatModel, "")
+	err := c.Chat(context.Background(), "", "", "q", rag.ChatOptions{}, &strings.Builder{})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "model not found") {
+		t.Errorf("error should contain server message, got: %v", err)
+	}
+}
+
+func TestEmbed_ServerError_IncludesBody(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = fmt.Fprintf(w, `{"error":{"message":"invalid api key","type":"authentication_error"}}`)
+	}))
+	defer srv.Close()
+
+	c, _ := New(srv.URL, "", testEmbedModel, testChatModel, "")
+	_, err := c.Embed(context.Background(), "hello")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "invalid api key") {
+		t.Errorf("error should contain server message, got: %v", err)
+	}
+}
+
+func TestChat_ContextAlreadyCancelled(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Should never be reached — context is cancelled before the request fires.
+		t.Error("server should not have been called")
+	}))
+	defer srv.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	c, _ := New(srv.URL, "", testEmbedModel, testChatModel, "")
+	err := c.Chat(ctx, "", "", "q", rag.ChatOptions{}, &strings.Builder{})
+	if err == nil {
+		t.Fatal("expected error for cancelled context, got nil")
+	}
+}
+
+func TestChat_OversizedSSELine(t *testing.T) {
+	largeLine := strings.Repeat("x", 128*1024) // 128KB — exceeds default 64KB scanner limit
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		flusher := w.(http.Flusher)
+		chunk := map[string]any{
+			"choices": []map[string]any{
+				{"delta": map[string]string{"reasoning": largeLine}},
+			},
+		}
+		data, _ := json.Marshal(chunk)
+		_, _ = fmt.Fprintf(w, "data: %s\n\n", data)
+		flusher.Flush()
+		chunk2 := map[string]any{
+			"choices": []map[string]any{
+				{"delta": map[string]string{"content": "final answer"}},
+			},
+		}
+		data2, _ := json.Marshal(chunk2)
+		_, _ = fmt.Fprintf(w, "data: %s\n\n", data2)
+		_, _ = fmt.Fprintf(w, "data: [DONE]\n\n")
+		flusher.Flush()
+	}))
+	defer srv.Close()
+
+	c, _ := New(srv.URL, "", testEmbedModel, testChatModel, "")
+	mw := &mockThinkingWriter{}
+	err := c.Chat(context.Background(), "", "", "q", rag.ChatOptions{ThinkMode: rag.ThinkAuto}, mw)
+	if err != nil {
+		t.Fatalf("Chat() error = %v (stream likely truncated by scanner buffer)", err)
+	}
+	if !strings.Contains(mw.answer.String(), "final answer") {
+		t.Errorf("stream was truncated — 'final answer' not received, got: %q", mw.answer.String())
+	}
+}
